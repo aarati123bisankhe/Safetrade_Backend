@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum ProductCategory {
+  BOOKS
+  ELECTRONICS
+  CLOTHING
+  FURNITURE
+  HANDMADE
+  OTHER
+}
+
+enum ProductCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+enum ProductStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  REMOVED
+}
+
+enum TransactionStatus {
+  PENDING_PAYMENT
+  FUNDS_HELD
+  SELLER_ACCEPTED
+  SHIPPED
+  READY_FOR_COLLECTION
+  BUYER_CONFIRMED
+  DISPUTED
+  FUNDS_RELEASED
+  BUYER_REFUNDED
+  CANCELLED
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  username           String             @unique
+  email              String             @unique
+  password           String
+  role               UserRole           @default(BUYER)
+  products           Product[]
+  buyerTransactions  TradeTransaction[] @relation("BuyerTransactions")
+  sellerTransactions TradeTransaction[] @relation("SellerTransactions")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+model Product {
+  id           String             @id @default(cuid())
+  name         String
+  description  String
+  price        Decimal
+  category     ProductCategory
+  condition    ProductCondition
+  status       ProductStatus      @default(AVAILABLE)
+  location     String
+  sellerId     String
+  seller       User               @relation(fields: [sellerId], references: [id])
+  transactions TradeTransaction[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([sellerId])
+  @@index([category])
+  @@index([status])
+}
+
+model TradeTransaction {
+  id               String            @id @default(cuid())
+  buyerId          String
+  sellerId         String
+  productId        String
+  productName      String
+  agreedPrice      Decimal
+  status           TransactionStatus @default(PENDING_PAYMENT)
+  buyerConfirmedAt DateTime?
+  releasedAt       DateTime?
+  refundedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  buyer   User    @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller  User    @relation("SellerTransactions", fields: [sellerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([productId])
+  @@index([status])
+  @@map("Transaction")
+}
