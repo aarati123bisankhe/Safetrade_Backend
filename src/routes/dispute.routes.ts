@@ -6,7 +6,7 @@ import { asyncHandler } from "../utils/async-handler";
 export const disputeRoutes = Router();
 
 disputeRoutes.post(
-  "/",
+  "/", // Create a new dispute
   asyncHandler(authenticationMiddleware),
   asyncHandler(disputeController.create),
 );

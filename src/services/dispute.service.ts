@@ -27,7 +27,7 @@ type DisputeStatusValue =
   | "RESOLVED_SELLER"
   | "REJECTED";
 
-const disputableTransactionStatuses: TransactionStatus[] = [//dispute can only be raised for transactions that are in these statuses
+const disputableTransactionStatuses: TransactionStatus[] = [
   TransactionStatus.FUNDS_HELD,
   TransactionStatus.SELLER_ACCEPTED,
   TransactionStatus.SHIPPED,
