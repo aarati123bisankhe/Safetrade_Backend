@@ -1,14 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../configs/database.config";
 
-type DisputeCreateData =
+type DisputeCreateData = 
   | Prisma.DisputeCreateInput
   | Prisma.DisputeUncheckedCreateInput;
 type DisputeUpdateData =
   | Prisma.DisputeUpdateInput
   | Prisma.DisputeUncheckedUpdateInput;
 
-export type DisputeClientLike = {
+export type DisputeClientLike = { //dispute: { create: any; update: any } } & {
   dispute: {
     create: (args: {
       data: DisputeCreateData;
