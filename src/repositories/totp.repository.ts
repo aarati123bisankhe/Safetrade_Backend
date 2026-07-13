@@ -1,11 +1,11 @@
 import { prisma } from "../configs/database.config";
 
-export type RecoveryCodeCreateInput = {
+export type RecoveryCodeCreateInput = { 
   userId: string;
   codeHash: string;
 };
 
-export const totpRepository = {
+export const totpRepository = { // This repository handles database operations related to TOTP and recovery codes
   updateUser(userId: string, data: Record<string, unknown>) {
     return prisma.user.update({
       where: { id: userId },
