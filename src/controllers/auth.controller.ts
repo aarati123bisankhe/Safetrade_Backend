@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { authService } from "../services/auth.service";
 import { loginSchema, registerSchema } from "../validators/auth.validator";
 
-export const authController = {
+export const authController = { // Controller for handling authentication-related requests
   async register(req: Request, res: Response) {
     const payload = registerSchema.parse(req.body);
     const result = await authService.register(payload);
