@@ -1,7 +1,7 @@
 import { ProductCategory, ProductCondition, ProductStatus } from "@prisma/client"; 
 import { z } from "zod";
 
-export const createProductSchema = z.object({
+export const createProductSchema = z.object({ //product
   name: z.string().trim().min(2, "Product name must be at least 2 characters"),
   description: z
     .string()
