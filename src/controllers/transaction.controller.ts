@@ -5,7 +5,7 @@ import {
   transactionIdParamSchema,
 } from "../validators/transaction.validator";
 
-export const transactionController = { 
+export const transactionController = { //transaction
   async create(req: Request, res: Response) {
     const payload = createTransactionSchema.parse(req.body);
     const transaction = await transactionService.createTransaction(
