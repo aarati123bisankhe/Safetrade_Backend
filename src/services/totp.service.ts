@@ -29,7 +29,7 @@ type MfaTokenPayload = {
   purpose: "totp_login";
 };
 
-type TotpReadyUser = {
+type TotpReadyUser = { 
   id: string;
   username: string;
   email: string;
@@ -46,7 +46,7 @@ const RECOVERY_CODE_COUNT = 8;
 const RECOVERY_CODE_GROUPS = 2;
 const RECOVERY_CODE_GROUP_LENGTH = 4;
 
-const createMfaToken = (userId: string) => {
+const createMfaToken = (userId: string) => { //this function creates a JWT token for TOTP login verification
   const signOptions: SignOptions = {
     expiresIn: MFA_TOKEN_EXPIRES_IN,
   };
