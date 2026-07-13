@@ -8,7 +8,7 @@ import { asyncHandler } from "../utils/async-handler";
 export const adminDashboardRoutes = Router();
 
 adminDashboardRoutes.get(
-  "/", // Route for fetching admin dashboard data
+  "/", 
   asyncHandler(authenticationMiddleware),
   authorizeRoles(UserRole.ADMIN),
   asyncHandler(adminDashboardController.getDashboard),

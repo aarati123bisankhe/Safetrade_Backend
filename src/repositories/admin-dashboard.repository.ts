@@ -7,7 +7,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "../configs/database.config";
 
-export const adminDashboardRepository = {
+export const adminDashboardRepository = { // Repository for fetching admin dashboard data
   async getSummary(since: Date) {
     const now = new Date();
 
