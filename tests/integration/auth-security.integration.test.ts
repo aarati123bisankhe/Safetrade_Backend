@@ -7,7 +7,7 @@ import {
   createUser,
 } from "../helpers/test-data";
 
-const loginPath = "/api/auth/login";
+const loginPath = "/api/auth/login"; // Path for the login endpoint
 
 const login = (
   email: string,

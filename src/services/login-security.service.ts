@@ -10,7 +10,7 @@ import {
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-export const loginSecurityService = { // Service for managing login security and account lockout mechanisms
+export const loginSecurityService = { 
   async recordUnknownUserFailure(email: string, context?: RequestContext) {
     const normalizedEmail = normalizeEmail(email);
 
