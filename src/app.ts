@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import { adminDashboardRoutes } from "./routes/admin-dashboard.routes";
 import { authRoutes } from "./routes/auth.routes";
 import { auditLogRoutes } from "./routes/audit-log.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
@@ -27,6 +28,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes); 
+app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admin/audit-logs", auditLogRoutes);
 app.use("/api/disputes", disputeRoutes);
 app.use("/api/products", productRoutes);
