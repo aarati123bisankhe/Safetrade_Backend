@@ -1,10 +1,13 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
+  DisputeReason,
+  DisputeStatus,
   Prisma,
   ProductCategory,
   ProductCondition,
   ProductStatus,
+  TransactionStatus,
   UserRole,
 } from "@prisma/client";
 import { prisma } from "../../src/configs/database.config";
@@ -21,6 +24,27 @@ type CreateProductOptions = {
   status?: ProductStatus;
 };
 
+type CreateTransactionOptions = {
+  buyerId: string;
+  sellerId: string;
+  productId: string;
+  productName?: string;
+  agreedPrice?: Prisma.Decimal | number | string;
+  status?: TransactionStatus;
+};
+
+type CreateDisputeOptions = {
+  transactionId: string;
+  raisedById: string;
+  previousTransactionStatus?: TransactionStatus;
+  reason?: DisputeReason;
+  description?: string;
+  status?: DisputeStatus;
+  resolvedById?: string;
+  adminNote?: string;
+  resolvedAt?: Date;
+};
+
 let sequence = 0;
 
 const nextValue = () => {
@@ -29,6 +53,8 @@ const nextValue = () => {
 };
 
 export const clearDatabase = async () => {
+  await prisma.disputeEvidence.deleteMany();
+  await prisma.dispute.deleteMany();
   await prisma.tradeTransaction.deleteMany();
   await prisma.product.deleteMany();
   await prisma.user.deleteMany();
@@ -93,6 +119,52 @@ export const createProduct = async ({
       location: "Kathmandu",
       status,
       sellerId,
+    },
+  });
+};
+
+export const createTransaction = async ({
+  buyerId,
+  sellerId,
+  productId,
+  productName = `Transaction Product ${nextValue()}`,
+  agreedPrice = new Prisma.Decimal(99.99),
+  status = TransactionStatus.FUNDS_HELD,
+}: CreateTransactionOptions) => {
+  return prisma.tradeTransaction.create({
+    data: {
+      buyerId,
+      sellerId,
+      productId,
+      productName,
+      agreedPrice,
+      status,
+    },
+  });
+};
+
+export const createDispute = async ({
+  transactionId,
+  raisedById,
+  previousTransactionStatus = TransactionStatus.SHIPPED,
+  reason = DisputeReason.ITEM_NOT_RECEIVED,
+  description = "The item has not been received and I need help.",
+  status = DisputeStatus.OPEN,
+  resolvedById,
+  adminNote,
+  resolvedAt,
+}: CreateDisputeOptions) => {
+  return prisma.dispute.create({
+    data: {
+      transactionId,
+      raisedById,
+      reason,
+      description,
+      status,
+      previousTransactionStatus,
+      resolvedById,
+      adminNote,
+      resolvedAt,
     },
   });
 };

@@ -17,7 +17,6 @@ describe("Transaction API", () => {
 
   afterAll(async () => {
     await clearDatabase();
-    await prisma.$disconnect();
   });
 
   it("creates a transaction and reserves the product", async () => {
