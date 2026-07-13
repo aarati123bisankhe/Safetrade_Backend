@@ -11,7 +11,7 @@ type AuthenticatedUser = {
   role: UserRole;
 };
 
-export const productService = {
+export const productService = { //product
   async getAllProducts() {
     return productRepository.findAll();
   },
