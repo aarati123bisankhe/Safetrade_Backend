@@ -1,5 +1,4 @@
 import { NextFunction, Request, Response } from "express";
-import multer from "multer";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import jwt from "jsonwebtoken";
@@ -26,18 +25,22 @@ export const errorMiddleware = (
     });
   }
 
-  if (error instanceof multer.MulterError) {
-    if (error.code === "LIMIT_FILE_SIZE") {
+  if (error instanceof Error && "code" in error) {
+    const typedError = error as Error & { code?: string };
+
+    if (typedError.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({
         success: false,
         message: "Evidence file exceeds the 5 MB size limit",
       });
     }
 
-    return res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    if (typedError.code?.startsWith("LIMIT_")) {
+      return res.status(400).json({
+        success: false,
+        message: typedError.message,
+      });
+    }
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

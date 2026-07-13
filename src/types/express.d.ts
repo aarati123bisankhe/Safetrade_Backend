@@ -9,6 +9,14 @@ declare global {
         username: string;
         role: UserRole;
       };
+      file?: {
+        fieldname: string;
+        originalname: string;
+        encoding: string;
+        mimetype: string;
+        size: number;
+        buffer: Buffer;
+      };
     }
   }
 }

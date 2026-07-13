@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileTypeFromBuffer } from "file-type";
 import { DisputeStatus, UserRole } from "@prisma/client";
-import type { Express } from "express";
 import { prisma } from "../configs/database.config";
 import { HttpError } from "../errors/http-error";
 import type { AuditLogClientLike } from "../repositories/audit-log.repository";
@@ -17,6 +16,13 @@ import { auditLogService, type RequestContext } from "./audit-log.service";
 type AuthenticatedUser = {
   id: string;
   role: UserRole;
+};
+
+type UploadedEvidenceFile = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
 };
 
 const STORAGE_DIR = path.resolve(process.cwd(), "storage/dispute-evidence"); 
@@ -155,7 +161,7 @@ const assertCanViewEvidence = (
 export const evidenceService = {
   async uploadEvidence(
     disputeId: string,
-    file: Express.Multer.File | undefined,
+    file: UploadedEvidenceFile | undefined,
     currentUser: AuthenticatedUser,
     context?: RequestContext,
   ) {
@@ -329,4 +335,3 @@ export const evidenceService = {
     };
   },
 };
-

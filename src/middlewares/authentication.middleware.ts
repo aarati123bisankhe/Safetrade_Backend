@@ -5,7 +5,9 @@ import { HttpError } from "../errors/http-error";
 import { userRepository } from "../repositories/user.repository";
 
 type JwtPayload = {
-  userId: string;
+  userId?: string;
+  sub?: string;
+  purpose?: string;
 };
 
 export const authenticationMiddleware = async ( //
@@ -21,6 +23,15 @@ export const authenticationMiddleware = async ( //
 
   const token = authorization.split(" ")[1];
   const decoded = jwt.verify(token, env.jwtSecret) as JwtPayload;
+
+  if (decoded.purpose) {
+    return next(new HttpError(401, "This token cannot be used for authenticated routes"));
+  }
+
+  if (!decoded.userId) {
+    return next(new HttpError(401, "Invalid authentication token"));
+  }
+
   const user = await userRepository.findById(decoded.userId);
 
   if (!user) {

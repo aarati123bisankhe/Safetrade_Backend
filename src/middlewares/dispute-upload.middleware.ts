@@ -7,13 +7,13 @@ const allowedMimeTypes = new Set([
   "application/pdf",
 ]);
  
-export const disputeEvidenceUpload = multer({ 
+export const disputeEvidenceUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024,
     files: 1,
   },
-  fileFilter: (_request, file, callback) => {
+  fileFilter: (_request: any, file: any, callback: any) => {
     if (!allowedMimeTypes.has(file.mimetype)) {
       return callback(
         new HttpError(415, "Unsupported evidence file type"),
@@ -23,4 +23,3 @@ export const disputeEvidenceUpload = multer({
     callback(null, true);
   },
 });
-

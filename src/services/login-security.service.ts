@@ -10,7 +10,7 @@ import {
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-export const loginSecurityService = { 
+export const loginSecurityService = {
   async recordUnknownUserFailure(email: string, context?: RequestContext) {
     const normalizedEmail = normalizeEmail(email);
 
@@ -145,6 +145,14 @@ export const loginSecurityService = {
       metadata: {
         role: user.role,
       },
+    });
+  },
+
+  async clearFailedAttempts(user: User) {
+    await userRepository.updateLoginSecurity(user.id, {
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      lastFailedLoginAt: null,
     });
   },
 };

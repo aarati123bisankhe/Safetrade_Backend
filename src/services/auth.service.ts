@@ -10,7 +10,7 @@ import { LoginInput, RegisterInput } from "../validators/auth.validator";
 
 type SafeUser = Omit<
   User,
-  "password" | "failedLoginAttempts" | "lockedUntil" | "lastFailedLoginAt"
+  "password" | "failedLoginAttempts" | "lockedUntil" | "lastFailedLoginAt" | "totpSecret"
 >;
 
 const sanitizeUser = (user: User): SafeUser => {
@@ -19,6 +19,7 @@ const sanitizeUser = (user: User): SafeUser => {
     failedLoginAttempts: _failedLoginAttempts,
     lockedUntil: _lockedUntil,
     lastFailedLoginAt: _lastFailedLoginAt,
+    totpSecret: _totpSecret,
     ...safeUser
   } = user;
   return safeUser;
@@ -33,6 +34,8 @@ const createToken = (userId: string): string => {
 };
 
 export const authService = {
+  createAccessToken: createToken,
+
   async register(payload: RegisterInput, context?: RequestContext) {
     const [existingEmailUser, existingUsernameUser] = await Promise.all([
       userRepository.findByEmail(payload.email),
@@ -96,6 +99,19 @@ export const authService = {
     if (!isPasswordValid) {
       await loginSecurityService.recordFailedPassword(user, context);
       throw new HttpError(401, "Invalid email or password");
+    }
+
+    const mfaChallenge = await import("./totp.service").then(({ totpService }) =>
+      totpService.createLoginChallenge(user),
+    );
+
+    if (mfaChallenge) {
+      await loginSecurityService.clearFailedAttempts(user);
+
+      return {
+        user: sanitizeUser(user),
+        ...mfaChallenge,
+      };
     }
 
     await loginSecurityService.recordSuccessfulLogin(user, context);

@@ -8,3 +8,5 @@ dotenv.config({
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "file:./test.db";
 process.env.JWT_SECRET ??= "test-secret";
+process.env.MFA_TOKEN_SECRET ??= "test-mfa-secret";
+process.env.TOTP_ENCRYPTION_KEY ??= "test-totp-encryption-key-32-bytes";

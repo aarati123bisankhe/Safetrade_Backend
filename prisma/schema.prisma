@@ -72,6 +72,12 @@ enum AuditEventType {
   LOGIN_FAILURE
   ACCOUNT_LOCKED
   LOGIN_BLOCKED
+  TOTP_SETUP_STARTED
+  TOTP_ENABLED
+  TOTP_VERIFICATION_FAILED
+  TOTP_LOGIN_SUCCESS
+  TOTP_DISABLED
+  RECOVERY_CODE_USED
   PRODUCT_CREATED
   PRODUCT_UPDATED
   PRODUCT_REMOVED
@@ -101,6 +107,8 @@ model User {
   failedLoginAttempts Int                @default(0)
   lockedUntil         DateTime?
   lastFailedLoginAt   DateTime?
+  totpEnabled         Boolean            @default(false)
+  totpSecret          String?
   products            Product[]
   buyerTransactions   TradeTransaction[] @relation("BuyerTransactions")
   sellerTransactions  TradeTransaction[] @relation("SellerTransactions")
@@ -109,8 +117,21 @@ model User {
   disputeEvidence     DisputeEvidence[]
   auditLogs           AuditLog[]
   loginAttempts       LoginAttempt[]
+  recoveryCodes       RecoveryCode[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model LoginAttempt {

@@ -8,9 +8,16 @@ type EnvConfig = {
   databaseUrl: string;
   jwtSecret: string;
   jwtExpiresIn: string;
+  mfaTokenSecret: string;
+  totpEncryptionKey: string;
 };
 
-const requiredEnv = ["DATABASE_URL", "JWT_SECRET"] as const;
+const requiredEnv = [
+  "DATABASE_URL",
+  "JWT_SECRET",
+  "MFA_TOKEN_SECRET",
+  "TOTP_ENCRYPTION_KEY",
+] as const;
 
 for (const key of requiredEnv) {
   if (!process.env[key]) {
@@ -24,4 +31,6 @@ export const env: EnvConfig = {
   databaseUrl: process.env.DATABASE_URL as string,
   jwtSecret: process.env.JWT_SECRET as string,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
+  mfaTokenSecret: process.env.MFA_TOKEN_SECRET as string,
+  totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY as string,
 };
