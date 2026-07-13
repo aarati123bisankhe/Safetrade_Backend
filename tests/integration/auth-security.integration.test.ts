@@ -79,7 +79,7 @@ describe("Auth Security API", () => {
       orderBy: { createdAt: "desc" },
     });
 
-    expect(updatedUser.failedLoginAttempts).toBe(12); //failed attempts counter should be 12
+    expect(updatedUser.failedLoginAttempts).toBe(12); 
     expect(updatedUser.lockedUntil).not.toBeNull();
     expect(updatedUser.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
     expect(auditLog).not.toBeNull();
@@ -155,7 +155,7 @@ describe("Auth Security API", () => {
     });
 
     expect(updatedUser.failedLoginAttempts).toBe(0);
-    expect(updatedUser.lockedUntil).toBeNull();
+    expect(updatedUser.lockedUntil).toBeNull(); // Ensure lockedUntil is cleared after successful login
     expect(updatedUser.lastFailedLoginAt).toBeNull();
   });
 
