@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-export const registerSchema = z.object({
+export const registerSchema = z.object({ //schema for validating user registration input
   username: z
     .string()
     .trim()
-    .min(3, "Username must be at least 3 characters long"),
+    .min(3, "Username must be at least 3 characters long"), 
   email: z.string().trim().email("Valid email is required"),
   password: z
     .string()
