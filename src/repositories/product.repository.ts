@@ -32,7 +32,7 @@ export const productRepository = { //product
     });
   },
 
-  delete(id: string): Promise<Product> { 
+  delete(id: string): Promise<Product> { //delete
     return prisma.product.delete({
       where: { id },
     });
