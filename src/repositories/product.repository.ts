@@ -1,7 +1,7 @@
 import { Prisma, Product, ProductStatus } from "@prisma/client";
 import { prisma } from "../configs/database.config";
 
-export const productRepository = {
+export const productRepository = { //product
   findAll(): Promise<Product[]> { 
     return prisma.product.findMany({
       where: {
