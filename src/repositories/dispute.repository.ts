@@ -8,7 +8,7 @@ type DisputeUpdateData =
   | Prisma.DisputeUpdateInput
   | Prisma.DisputeUncheckedUpdateInput;
 
-export type DisputeClientLike = { //dispute: { create: any; update: any } } & {
+export type DisputeClientLike = { 
   dispute: {
     create: (args: {
       data: DisputeCreateData;

@@ -6,7 +6,7 @@ import {
   resolveDisputeSchema,
 } from "../validators/dispute.validator";
 
-export const disputeController = {
+export const disputeController = { //dispute controller handles the dispute related requests
   async create(req: Request, res: Response) {
     const payload = createDisputeSchema.parse(req.body);
     const dispute = await disputeService.createDispute(payload, req.user!);
