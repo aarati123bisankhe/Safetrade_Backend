@@ -1,7 +1,7 @@
 import { Prisma, User } from "@prisma/client";
 import { prisma } from "../configs/database.config";
 
-export type LoginSecurityUpdateInput = { // Type for updating login security fields of a user
+export type LoginSecurityUpdateInput = { 
   failedLoginAttempts: number;
   lockedUntil: Date | null;
   lastFailedLoginAt: Date | null;
