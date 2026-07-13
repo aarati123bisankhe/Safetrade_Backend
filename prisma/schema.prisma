@@ -70,6 +70,8 @@ enum AuditEventType {
   USER_REGISTERED
   LOGIN_SUCCESS
   LOGIN_FAILURE
+  ACCOUNT_LOCKED
+  LOGIN_BLOCKED
   PRODUCT_CREATED
   PRODUCT_UPDATED
   PRODUCT_REMOVED
@@ -88,20 +90,42 @@ enum AuditEventType {
 }
 
 model User {
-  id                 String             @id @default(cuid())
-  username           String             @unique
-  email              String             @unique
-  password           String
-  role               UserRole           @default(BUYER)
-  products           Product[]
-  buyerTransactions  TradeTransaction[] @relation("BuyerTransactions")
-  sellerTransactions TradeTransaction[] @relation("SellerTransactions")
-  raisedDisputes     Dispute[]          @relation("RaisedDisputes")
-  resolvedDisputes   Dispute[]          @relation("ResolvedDisputes")
-  disputeEvidence    DisputeEvidence[]
-  auditLogs          AuditLog[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                  String             @id @default(cuid())
+  username            String             @unique
+  email               String             @unique
+  password            String
+  role                UserRole           @default(BUYER)
+  failedLoginAttempts Int                @default(0)
+  lockedUntil         DateTime?
+  lastFailedLoginAt   DateTime?
+  products            Product[]
+  buyerTransactions   TradeTransaction[] @relation("BuyerTransactions")
+  sellerTransactions  TradeTransaction[] @relation("SellerTransactions")
+  raisedDisputes      Dispute[]          @relation("RaisedDisputes")
+  resolvedDisputes    Dispute[]          @relation("ResolvedDisputes")
+  disputeEvidence     DisputeEvidence[]
+  auditLogs           AuditLog[]
+  loginAttempts       LoginAttempt[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  userId     String?
+  email      String
+  ipAddress  String?
+  userAgent  String?
+  successful Boolean
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([email])
+  @@index([ipAddress])
+  @@index([createdAt])
 }
 
 model Product {

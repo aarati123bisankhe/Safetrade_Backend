@@ -5,12 +5,22 @@ import { env } from "../configs/env.config";
 import { HttpError } from "../errors/http-error";
 import { userRepository } from "../repositories/user.repository";
 import { auditLogService, type RequestContext } from "./audit-log.service";
+import { loginSecurityService } from "./login-security.service";
 import { LoginInput, RegisterInput } from "../validators/auth.validator";
 
-type SafeUser = Omit<User, "password">;
+type SafeUser = Omit<
+  User,
+  "password" | "failedLoginAttempts" | "lockedUntil" | "lastFailedLoginAt"
+>;
 
 const sanitizeUser = (user: User): SafeUser => {
-  const { password, ...safeUser } = user;
+  const {
+    password,
+    failedLoginAttempts: _failedLoginAttempts,
+    lockedUntil: _lockedUntil,
+    lastFailedLoginAt: _lastFailedLoginAt,
+    ...safeUser
+  } = user;
   return safeUser;
 };
 
@@ -65,21 +75,18 @@ export const authService = {
   },
 
   async login(payload: LoginInput, context?: RequestContext) {
-    const user = await userRepository.findByEmail(payload.email);
+    const normalizedEmail = payload.email.trim().toLowerCase();
+    const user = await userRepository.findByEmail(normalizedEmail);
 
     if (!user) {
-      await auditLogService.createLogSafely({
-        eventType: "LOGIN_FAILURE",
-        targetType: "User",
-        description: "Login failed because the account could not be found",
-        ipAddress: context?.ipAddress,
-        userAgent: context?.userAgent,
-        metadata: {
-          reason: "USER_NOT_FOUND",
-        },
-      });
+      await loginSecurityService.recordUnknownUserFailure(
+        normalizedEmail,
+        context,
+      );
       throw new HttpError(401, "Invalid email or password");
     }
+
+    await loginSecurityService.ensureAccountIsNotLocked(user, context);
 
     const isPasswordValid = await bcrypt.compare(
       payload.password,
@@ -87,33 +94,11 @@ export const authService = {
     );
 
     if (!isPasswordValid) {
-      await auditLogService.createLogSafely({
-        eventType: "LOGIN_FAILURE",
-        actorId: user.id,
-        targetType: "User",
-        targetId: user.id,
-        description: "Login failed because an invalid password was provided",
-        ipAddress: context?.ipAddress,
-        userAgent: context?.userAgent,
-        metadata: {
-          reason: "INVALID_PASSWORD",
-        },
-      });
+      await loginSecurityService.recordFailedPassword(user, context);
       throw new HttpError(401, "Invalid email or password");
     }
 
-    await auditLogService.createLogSafely({
-      eventType: "LOGIN_SUCCESS",
-      actorId: user.id,
-      targetType: "User",
-      targetId: user.id,
-      description: "User logged in successfully",
-      ipAddress: context?.ipAddress,
-      userAgent: context?.userAgent,
-      metadata: {
-        role: user.role,
-      },
-    });
+    await loginSecurityService.recordSuccessfulLogin(user, context);
 
     return {
       user: sanitizeUser(user),

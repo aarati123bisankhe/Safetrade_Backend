@@ -1,0 +1,2 @@
+export const MAX_FAILED_LOGIN_ATTEMPTS = 12;
+export const ACCOUNT_LOCK_DURATION_MINUTES = 15;

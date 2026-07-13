@@ -56,6 +56,7 @@ export const clearDatabase = async () => {
   await prisma.auditLog.deleteMany();
   await prisma.disputeEvidence.deleteMany();
   await prisma.dispute.deleteMany();
+  await prisma.loginAttempt.deleteMany();
   await prisma.tradeTransaction.deleteMany();
   await prisma.product.deleteMany();
   await prisma.user.deleteMany();

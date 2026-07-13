@@ -8,5 +8,6 @@ export default defineConfig({
     globals: true,
     fileParallelism: false,
     maxWorkers: 1,
+    minWorkers: 1,
   },
 });
