@@ -2,7 +2,7 @@ import { HttpError } from "../errors/http-error";
 import { adminDashboardRepository } from "../repositories/admin-dashboard.repository";
 import type { DashboardQueryInput } from "../validators/admin-dashboard.validator";
 
-const periodMilliseconds = {
+const periodMilliseconds = { 
   "24h": 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
@@ -13,7 +13,7 @@ type AuthenticatedUser = {
   role: "BUYER" | "SELLER" | "ADMIN";
 };
 
-export const adminDashboardService = {
+export const adminDashboardService = { // Service for fetching admin dashboard data
   async getDashboard(query: DashboardQueryInput, currentUser: AuthenticatedUser) {
     if (currentUser.role !== "ADMIN") {
       throw new HttpError(403, "Only admins can access the dashboard");
