@@ -1,7 +1,7 @@
 import { Prisma, Product, ProductStatus } from "@prisma/client";
 import { prisma } from "../configs/database.config";
 
-export const productRepository = { //product
+export const productRepository = { 
   findAll(): Promise<Product[]> { 
     return prisma.product.findMany({
       where: {
@@ -21,18 +21,18 @@ export const productRepository = { //product
     });
   },
 
-  create(data: Prisma.ProductCreateInput): Promise<Product> {  //create
+  create(data: Prisma.ProductCreateInput): Promise<Product> {  
     return prisma.product.create({ data });
   },
 
-  update(id: string, data: Prisma.ProductUpdateInput): Promise<Product> { //update
+  update(id: string, data: Prisma.ProductUpdateInput): Promise<Product> { 
     return prisma.product.update({
       where: { id },
       data,
     });
   },
 
-  delete(id: string): Promise<Product> { //delete
+  delete(id: string): Promise<Product> { 
     return prisma.product.delete({
       where: { id },
     });
