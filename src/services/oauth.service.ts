@@ -27,7 +27,7 @@ import type {
   OAuthUnlinkInput,
 } from "../validators/oauth.validator";
 
-type AuthenticatedUser = {
+type AuthenticatedUser = { 
   id: string;
   email: string;
   username: string;
@@ -44,7 +44,7 @@ type GoogleIdentity = {
   expiresAt: number;
 };
 
-type GoogleOidcAdapter = {
+type GoogleOidcAdapter = { //this interface defines the methods that the Google OIDC adapter must implement
   getAuthorizationUrl(input: {
     state: string;
     nonce: string;
@@ -63,7 +63,7 @@ const GOOGLE_ISSUERS = new Set([
   "https://accounts.google.com",
 ]);
 
-const createDefaultGoogleAdapter = (): GoogleOidcAdapter => {
+const createDefaultGoogleAdapter = (): GoogleOidcAdapter => { //this function creates a default implementation of the Google OIDC adapter
   const client = new OAuth2Client({
     clientId: env.googleClientId,
     clientSecret: env.googleClientSecret,
