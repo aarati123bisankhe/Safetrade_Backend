@@ -25,7 +25,7 @@ export const productRepository = { //product
     return prisma.product.create({ data });
   },
 
-  update(id: string, data: Prisma.ProductUpdateInput): Promise<Product> { 
+  update(id: string, data: Prisma.ProductUpdateInput): Promise<Product> { //update
     return prisma.product.update({
       where: { id },
       data,
