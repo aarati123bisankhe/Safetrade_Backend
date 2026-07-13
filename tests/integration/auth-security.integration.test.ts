@@ -7,7 +7,7 @@ import {
   createUser,
 } from "../helpers/test-data";
 
-const loginPath = "/api/auth/login"; // Path for the login endpoint
+const loginPath = "/api/auth/login"; 
 
 const login = (
   email: string,
@@ -79,7 +79,7 @@ describe("Auth Security API", () => {
       orderBy: { createdAt: "desc" },
     });
 
-    expect(updatedUser.failedLoginAttempts).toBe(12);
+    expect(updatedUser.failedLoginAttempts).toBe(12); //failed attempts counter should be 12
     expect(updatedUser.lockedUntil).not.toBeNull();
     expect(updatedUser.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
     expect(auditLog).not.toBeNull();
