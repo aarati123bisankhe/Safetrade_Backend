@@ -6,7 +6,7 @@ import {
   oauthUnlinkSchema,
 } from "../validators/oauth.validator";
 
-const getRequestContext = (request: Request) => ({
+const getRequestContext = (request: Request) => ({ //this function extracts the IP address and user agent from the request object
   ipAddress: request.ip,
   userAgent: request.get("user-agent") ?? undefined,
 });

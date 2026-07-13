@@ -5,7 +5,7 @@ const oauthAccountInclude = {
   user: true,
 } as const;
 
-export const oauthRepository = { //this repository handles all database operations related to OAuth
+export const oauthRepository = {
   createState(data: {
     stateHash: string;
     nonce: string;
