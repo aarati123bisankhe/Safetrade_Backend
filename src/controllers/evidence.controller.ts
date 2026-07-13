@@ -11,7 +11,7 @@ const getRequestContext = (request: Request) => ({
   userAgent: request.get("user-agent") ?? undefined,
 });
 
-export const evidenceController = { // Controller for handling dispute evidence-related operations
+export const evidenceController = { 
   async upload(req: Request, res: Response) {
     const params = disputeEvidenceParamsSchema.parse(req.params);
     const evidence = await evidenceService.uploadEvidence(

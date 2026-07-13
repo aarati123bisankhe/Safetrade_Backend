@@ -27,7 +27,7 @@ const textBuffer = Buffer.from("this is not a real image", "utf8");
 const oversizedBuffer = Buffer.alloc(5 * 1024 * 1024 + 1, "a");
 const storageDir = path.resolve(process.cwd(), "storage/dispute-evidence");
 
-const uploadEvidence = (
+const uploadEvidence = ( //
   token: string,
   disputeId: string,
   buffer: Buffer,
