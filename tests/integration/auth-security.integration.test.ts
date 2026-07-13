@@ -155,8 +155,8 @@ describe("Auth Security API", () => {
     });
 
     expect(updatedUser.failedLoginAttempts).toBe(0);
-    expect(updatedUser.lockedUntil).toBeNull(); // Ensure lockedUntil is cleared after successful login
-    expect(updatedUser.lastFailedLoginAt).toBeNull();
+    expect(updatedUser.lockedUntil).toBeNull(); 
+    expect(updatedUser.lastFailedLoginAt).toBeNull(); // Ensure lastFailedLoginAt is cleared after successful login
   });
 
   it("unknown email returns a generic error and does not reveal account existence", async () => {
