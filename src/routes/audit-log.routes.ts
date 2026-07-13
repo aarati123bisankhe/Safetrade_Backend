@@ -5,8 +5,8 @@ import { asyncHandler } from "../utils/async-handler";
 
 export const auditLogRoutes = Router();
 
-auditLogRoutes.get(
-  "/",
+auditLogRoutes.get( //audit log routes for admin
+  "/", 
   asyncHandler(authenticationMiddleware),
   asyncHandler(auditLogController.list),
 );
