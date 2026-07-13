@@ -6,7 +6,7 @@ import {
   disputeEvidenceParamsSchema,
 } from "../validators/evidence.validator";
 
-const getRequestContext = (request: Request) => ({
+const getRequestContext = (request: Request) => ({ // Function to extract request context information
   ipAddress: request.ip,
   userAgent: request.get("user-agent") ?? undefined,
 });

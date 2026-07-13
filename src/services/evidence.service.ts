@@ -19,10 +19,10 @@ type AuthenticatedUser = {
   role: UserRole;
 };
 
-const STORAGE_DIR = path.resolve(process.cwd(), "storage/dispute-evidence"); // Absolute path to the storage directory for dispute evidence files
+const STORAGE_DIR = path.resolve(process.cwd(), "storage/dispute-evidence"); 
 const MAX_FILES_PER_DISPUTE = 5;
 
-const allowedDetectedTypes = new Map<string, string>([ // MIME type to file extension mapping
+const allowedDetectedTypes = new Map<string, string>([ 
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
   ["application/pdf", "pdf"],
@@ -66,7 +66,7 @@ const assertSafeOriginalName = (name: string) => {
   }
 };
 
-const ensureStorageDirectory = async () => {
+const ensureStorageDirectory = async () => { 
   await fs.mkdir(STORAGE_DIR, { recursive: true });
 };
 
