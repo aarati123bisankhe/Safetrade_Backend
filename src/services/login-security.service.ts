@@ -118,6 +118,30 @@ export const loginSecurityService = {
     };
   },
 
+  async recordPasswordLoginRejected(user: User, context?: RequestContext) {
+    await loginAttemptRepository.create({
+      userId: user.id,
+      email: normalizeEmail(user.email),
+      successful: false,
+      reason: "PASSWORD_AUTH_DISABLED",
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+
+    await auditLogService.createLogSafely({
+      eventType: "LOGIN_FAILURE",
+      actorId: user.id,
+      targetType: "User",
+      targetId: user.id,
+      description: "Password login was rejected because this account uses another login method",
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+      metadata: {
+        reason: "PASSWORD_AUTH_DISABLED",
+      },
+    });
+  },
+
   async recordSuccessfulLogin(user: User, context?: RequestContext) {
     await userRepository.updateLoginSecurity(user.id, {
       failedLoginAttempts: 0,

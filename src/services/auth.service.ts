@@ -10,7 +10,12 @@ import { LoginInput, RegisterInput } from "../validators/auth.validator";
 
 type SafeUser = Omit<
   User,
-  "password" | "failedLoginAttempts" | "lockedUntil" | "lastFailedLoginAt" | "totpSecret"
+  | "password"
+  | "failedLoginAttempts"
+  | "lockedUntil"
+  | "lastFailedLoginAt"
+  | "totpSecret"
+  | "passwordAuthEnabled"
 >;
 
 const sanitizeUser = (user: User): SafeUser => {
@@ -20,6 +25,7 @@ const sanitizeUser = (user: User): SafeUser => {
     lockedUntil: _lockedUntil,
     lastFailedLoginAt: _lastFailedLoginAt,
     totpSecret: _totpSecret,
+    passwordAuthEnabled: _passwordAuthEnabled,
     ...safeUser
   } = user;
   return safeUser;
@@ -90,6 +96,11 @@ export const authService = {
     }
 
     await loginSecurityService.ensureAccountIsNotLocked(user, context);
+
+    if (!user.passwordAuthEnabled) {
+      await loginSecurityService.recordPasswordLoginRejected(user, context);
+      throw new HttpError(401, "Invalid email or password");
+    }
 
     const isPasswordValid = await bcrypt.compare(
       payload.password,

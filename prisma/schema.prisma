@@ -66,6 +66,15 @@ enum DisputeReason {
   OTHER
 }
 
+enum OAuthProvider {
+  GOOGLE
+}
+
+enum OAuthStateAction {
+  LOGIN
+  LINK
+}
+
 enum AuditEventType {
   USER_REGISTERED
   LOGIN_SUCCESS
@@ -78,6 +87,13 @@ enum AuditEventType {
   TOTP_LOGIN_SUCCESS
   TOTP_DISABLED
   RECOVERY_CODE_USED
+  OAUTH_LOGIN_STARTED
+  OAUTH_LOGIN_SUCCESS
+  OAUTH_LOGIN_FAILURE
+  OAUTH_ACCOUNT_CREATED
+  OAUTH_ACCOUNT_LINKED
+  OAUTH_LINK_REJECTED
+  OAUTH_ACCOUNT_UNLINKED
   PRODUCT_CREATED
   PRODUCT_UPDATED
   PRODUCT_REMOVED
@@ -99,27 +115,78 @@ enum AuditEventType {
 }
 
 model User {
-  id                  String             @id @default(cuid())
-  username            String             @unique
-  email               String             @unique
+  id                  String              @id @default(cuid())
+  username            String              @unique
+  email               String              @unique
   password            String
-  role                UserRole           @default(BUYER)
-  failedLoginAttempts Int                @default(0)
+  role                UserRole            @default(BUYER)
+  failedLoginAttempts Int                 @default(0)
   lockedUntil         DateTime?
   lastFailedLoginAt   DateTime?
-  totpEnabled         Boolean            @default(false)
+  passwordAuthEnabled Boolean             @default(true)
+  totpEnabled         Boolean             @default(false)
   totpSecret          String?
   products            Product[]
-  buyerTransactions   TradeTransaction[] @relation("BuyerTransactions")
-  sellerTransactions  TradeTransaction[] @relation("SellerTransactions")
-  raisedDisputes      Dispute[]          @relation("RaisedDisputes")
-  resolvedDisputes    Dispute[]          @relation("ResolvedDisputes")
+  buyerTransactions   TradeTransaction[]  @relation("BuyerTransactions")
+  sellerTransactions  TradeTransaction[]  @relation("SellerTransactions")
+  raisedDisputes      Dispute[]           @relation("RaisedDisputes")
+  resolvedDisputes    Dispute[]           @relation("ResolvedDisputes")
   disputeEvidence     DisputeEvidence[]
   auditLogs           AuditLog[]
   loginAttempts       LoginAttempt[]
   recoveryCodes       RecoveryCode[]
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  oauthAccounts       OAuthAccount[]
+  oauthStates         OAuthState[]
+  oauthExchangeCodes  OAuthExchangeCode[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+}
+
+model OAuthAccount {
+  id                String        @id @default(cuid())
+  userId            String
+  provider          OAuthProvider
+  providerAccountId String
+  providerEmail     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model OAuthState {
+  id           String           @id @default(cuid())
+  stateHash    String           @unique
+  nonce        String
+  codeVerifier String
+  action       OAuthStateAction
+  userId       String?
+  consumedAt   DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime         @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OAuthExchangeCode {
+  id         String           @id @default(cuid())
+  codeHash   String           @unique
+  userId     String
+  action     OAuthStateAction
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model RecoveryCode {

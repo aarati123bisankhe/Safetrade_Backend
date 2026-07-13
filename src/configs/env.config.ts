@@ -10,6 +10,12 @@ type EnvConfig = {
   jwtExpiresIn: string;
   mfaTokenSecret: string;
   totpEncryptionKey: string;
+  googleClientId: string;
+  googleClientSecret: string;
+  googleRedirectUri: string;
+  oauthStateSecret: string;
+  oauthSuccessRedirect: string;
+  oauthFailureRedirect: string;
 };
 
 const requiredEnv = [
@@ -17,6 +23,12 @@ const requiredEnv = [
   "JWT_SECRET",
   "MFA_TOKEN_SECRET",
   "TOTP_ENCRYPTION_KEY",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_REDIRECT_URI",
+  "OAUTH_STATE_SECRET",
+  "OAUTH_SUCCESS_REDIRECT",
+  "OAUTH_FAILURE_REDIRECT",
 ] as const;
 
 for (const key of requiredEnv) {
@@ -33,4 +45,10 @@ export const env: EnvConfig = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   mfaTokenSecret: process.env.MFA_TOKEN_SECRET as string,
   totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY as string,
+  googleClientId: process.env.GOOGLE_CLIENT_ID as string,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI as string,
+  oauthStateSecret: process.env.OAUTH_STATE_SECRET as string,
+  oauthSuccessRedirect: process.env.OAUTH_SUCCESS_REDIRECT as string,
+  oauthFailureRedirect: process.env.OAUTH_FAILURE_REDIRECT as string,
 };

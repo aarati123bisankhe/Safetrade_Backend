@@ -54,6 +54,9 @@ const nextValue = () => {
 
 export const clearDatabase = async () => {
   await prisma.auditLog.deleteMany();
+  await prisma.oAuthExchangeCode.deleteMany();
+  await prisma.oAuthState.deleteMany();
+  await prisma.oAuthAccount.deleteMany();
   await prisma.disputeEvidence.deleteMany();
   await prisma.dispute.deleteMany();
   await prisma.loginAttempt.deleteMany();
