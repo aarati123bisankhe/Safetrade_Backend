@@ -13,7 +13,7 @@ type AuthenticatedUser = {
   role: "BUYER" | "SELLER" | "ADMIN";
 };
 
-export const adminDashboardService = { // Service for fetching admin dashboard data
+export const adminDashboardService = { 
   async getDashboard(query: DashboardQueryInput, currentUser: AuthenticatedUser) {
     if (currentUser.role !== "ADMIN") {
       throw new HttpError(403, "Only admins can access the dashboard");
