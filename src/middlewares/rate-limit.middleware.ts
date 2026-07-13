@@ -1,6 +1,6 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
-export const loginRateLimiter = rateLimit({ // Rate limiter for login attempts
+export const loginRateLimiter = rateLimit({ 
   windowMs: 60 * 1000,
   limit: 20,
   standardHeaders: true,

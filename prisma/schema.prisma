@@ -86,6 +86,9 @@ enum AuditEventType {
   DISPUTE_REFUNDED
   DISPUTE_RELEASED_TO_SELLER
   DISPUTE_REJECTED
+  DISPUTE_EVIDENCE_UPLOADED
+  DISPUTE_EVIDENCE_VIEWED
+  DISPUTE_EVIDENCE_UPLOAD_REJECTED
   UNAUTHORIZED_ACCESS_ATTEMPT
 }
 
@@ -201,10 +204,12 @@ model DisputeEvidence {
   id           String   @id @default(cuid())
   disputeId    String
   uploadedById String
-  filePath     String
-  fileName     String
+  originalName String
+  storedName   String
+  storagePath  String
   mimeType     String
-  fileSize     Int
+  sizeBytes    Int
+  sha256Hash   String
   createdAt    DateTime @default(now())
 
   dispute    Dispute @relation(fields: [disputeId], references: [id])
@@ -212,6 +217,7 @@ model DisputeEvidence {
 
   @@index([disputeId])
   @@index([uploadedById])
+  @@index([createdAt])
 }
 
 model AuditLog {

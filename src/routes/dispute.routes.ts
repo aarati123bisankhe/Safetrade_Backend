@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { disputeController } from "../controllers/dispute.controller";
+import { evidenceRoutes } from "./evidence.routes";
 import { authenticationMiddleware } from "../middlewares/authentication.middleware";
 import { asyncHandler } from "../utils/async-handler";
 
@@ -29,4 +30,10 @@ disputeRoutes.patch(
   "/:disputeId/resolve",
   asyncHandler(authenticationMiddleware),
   asyncHandler(disputeController.resolve),
+);
+
+disputeRoutes.use(
+  "/:disputeId/evidence",
+  asyncHandler(authenticationMiddleware),
+  evidenceRoutes,
 );

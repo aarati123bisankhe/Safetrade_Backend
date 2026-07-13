@@ -94,7 +94,28 @@ const disputeDetailsInclude = {
       },
     },
   },
-  evidence: true,
+  evidence: {
+    select: {
+      id: true,
+      disputeId: true,
+      uploadedById: true,
+      originalName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sha256Hash: true,
+      createdAt: true,
+      uploadedBy: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  },
 } as const;
 
 export const disputeRepository = {
