@@ -7,6 +7,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "test:db": "NODE_ENV=test sh ./tests/reset-test-db.sh",
+    "test": "npm run test:db && DATABASE_URL=file:./test.db NODE_ENV=test vitest run",
+    "test:watch": "DATABASE_URL=file:./test.db NODE_ENV=test vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
@@ -28,8 +31,11 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.7.4",
+    "@types/supertest": "^7.2.0",
     "prisma": "^6.0.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^4.1.10"
   }
 }
