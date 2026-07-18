@@ -2,13 +2,11 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileTypeFromBuffer } from "file-type";
-import { DisputeStatus, UserRole } from "@prisma/client";
-import { prisma } from "../configs/database.config";
+import { DisputeStatus, UserRole } from "../db/types";
+import { runInTransaction } from "../configs/database.config";
 import { HttpError } from "../errors/http-error";
-import type { AuditLogClientLike } from "../repositories/audit-log.repository";
 import {
   evidenceRepository,
-  type EvidenceClientLike,
 } from "../repositories/evidence.repository";
 import { disputeRepository } from "../repositories/dispute.repository";
 import { auditLogService, type RequestContext } from "./audit-log.service";
@@ -25,11 +23,11 @@ type UploadedEvidenceFile = {
   buffer: Buffer;
 };
 
-const STORAGE_DIR = path.resolve(process.cwd(), "storage/dispute-evidence"); 
+const STORAGE_DIR = path.resolve(process.cwd(), "storage/dispute-evidence");
 const MAX_FILES_PER_DISPUTE = 5;
 
-const allowedDetectedTypes = new Map<string, string>([ // Map of allowed MIME types to their corresponding file extensions
-  ["image/jpeg", "jpg"], 
+const allowedDetectedTypes = new Map<string, string>([
+  ["image/jpeg", "jpg"],
   ["image/png", "png"],
   ["application/pdf", "pdf"],
 ]);
@@ -72,28 +70,11 @@ const assertSafeOriginalName = (name: string) => {
   }
 };
 
-const ensureStorageDirectory = async () => { 
+const ensureStorageDirectory = async () => {
   await fs.mkdir(STORAGE_DIR, { recursive: true });
 };
 
-const toEvidenceResponse = (
-  evidence: {
-    id: string;
-    originalName: string;
-    mimeType: string;
-    sizeBytes: number;
-    sha256Hash: string;
-    createdAt: Date;
-    uploadedBy?: {
-      id: string;
-      username: string;
-      email: string;
-      role: UserRole;
-      createdAt: Date;
-      updatedAt: Date;
-    };
-  },
-) => ({
+const toEvidenceResponse = (evidence: any) => ({
   id: evidence.id,
   originalName: evidence.originalName,
   mimeType: evidence.mimeType,
@@ -114,18 +95,12 @@ const findDisputeOrThrow = async (disputeId: string) => {
 };
 
 const assertCanUploadEvidence = (
-  dispute: {
-    status: DisputeStatus;
-    transaction: {
-      buyerId: string;
-      sellerId: string;
-    };
-  },
+  dispute: any,
   currentUser: AuthenticatedUser,
 ) => {
   const canUpload =
-    dispute.transaction.buyerId === currentUser.id ||
-    dispute.transaction.sellerId === currentUser.id;
+    dispute.transaction?.buyerId === currentUser.id ||
+    dispute.transaction?.sellerId === currentUser.id;
 
   if (!canUpload) {
     throw new HttpError(403, "You do not have permission to upload dispute evidence");
@@ -140,18 +115,13 @@ const assertCanUploadEvidence = (
 };
 
 const assertCanViewEvidence = (
-  dispute: {
-    transaction: {
-      buyerId: string;
-      sellerId: string;
-    };
-  },
+  dispute: any,
   currentUser: AuthenticatedUser,
 ) => {
   const canView =
     currentUser.role === UserRole.ADMIN ||
-    dispute.transaction.buyerId === currentUser.id ||
-    dispute.transaction.sellerId === currentUser.id;
+    dispute.transaction?.buyerId === currentUser.id ||
+    dispute.transaction?.sellerId === currentUser.id;
 
   if (!canView) {
     throw new HttpError(403, "You do not have permission to view dispute evidence");
@@ -234,9 +204,8 @@ export const evidenceService = {
       await fs.writeFile(absolutePath, file.buffer, { flag: "wx" });
       savedPath = absolutePath;
 
-      const evidence = await prisma.$transaction(async (tx) => {
+      const evidence = await runInTransaction(async (session) => {
         const createdEvidence = await evidenceRepository.create(
-          tx as EvidenceClientLike,
           {
             disputeId,
             uploadedById: currentUser.id,
@@ -247,6 +216,7 @@ export const evidenceService = {
             sizeBytes: file.size,
             sha256Hash,
           },
+          session,
         );
 
         await auditLogService.createLog(
@@ -266,7 +236,7 @@ export const evidenceService = {
               sha256Hash,
             },
           },
-          tx as AuditLogClientLike,
+          session,
         );
 
         return createdEvidence;

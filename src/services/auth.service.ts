@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
-import jwt, { SignOptions } from "jsonwebtoken";
-import { User, UserRole } from "@prisma/client";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../configs/env.config";
+import { UserRole, type User } from "../db/types";
 import { HttpError } from "../errors/http-error";
 import { userRepository } from "../repositories/user.repository";
 import { auditLogService, type RequestContext } from "./audit-log.service";
@@ -33,10 +33,11 @@ const sanitizeUser = (user: User): SafeUser => {
 
 const createToken = (userId: string): string => {
   const signOptions: SignOptions = {
+    algorithm: "RS256",
     expiresIn: env.jwtExpiresIn as SignOptions["expiresIn"],
   };
 
-  return jwt.sign({ userId }, env.jwtSecret, signOptions);
+  return jwt.sign({ userId }, env.jwtPrivateKey, signOptions);
 };
 
 export const authService = {

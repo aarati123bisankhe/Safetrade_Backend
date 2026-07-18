@@ -1,43 +1,37 @@
-import { prisma } from "../configs/database.config";
+import { RecoveryCodeModel, UserModel, normalizeMongoDoc } from "../db/models";
+import type { RecoveryCode } from "../db/types";
 
-export type RecoveryCodeCreateInput = { 
+export type RecoveryCodeCreateInput = {
   userId: string;
   codeHash: string;
 };
 
-export const totpRepository = { 
+export const totpRepository = {
   updateUser(userId: string, data: Record<string, unknown>) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: data as never,
-    });
+    return UserModel.findByIdAndUpdate(userId, data, { new: true }).lean();
   },
 
-  findRecoveryCodes(userId: string) {
-    return prisma.recoveryCode.findMany({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-    });
+  async findRecoveryCodes(userId: string) {
+    const codes = await RecoveryCodeModel.find({ userId })
+      .sort({ createdAt: 1 })
+      .lean();
+    return normalizeMongoDoc(codes as unknown) as RecoveryCode[];
   },
 
-  createRecoveryCodes(data: RecoveryCodeCreateInput[]) {
-    return prisma.recoveryCode.createMany({
-      data,
-    });
+  async createRecoveryCodes(data: RecoveryCodeCreateInput[]) {
+    await RecoveryCodeModel.insertMany(data);
   },
 
-  markRecoveryCodeUsed(recoveryCodeId: string) {
-    return prisma.recoveryCode.update({
-      where: { id: recoveryCodeId },
-      data: {
-        usedAt: new Date(),
-      },
-    });
+  async markRecoveryCodeUsed(recoveryCodeId: string) {
+    const code = await RecoveryCodeModel.findByIdAndUpdate(
+      recoveryCodeId,
+      { usedAt: new Date() },
+      { new: true },
+    ).lean();
+    return code ? (normalizeMongoDoc(code as unknown) as RecoveryCode) : null;
   },
 
-  deleteRecoveryCodes(userId: string) {
-    return prisma.recoveryCode.deleteMany({
-      where: { userId },
-    });
+  async deleteRecoveryCodes(userId: string) {
+    await RecoveryCodeModel.deleteMany({ userId });
   },
 };

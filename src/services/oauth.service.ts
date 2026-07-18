@@ -11,7 +11,7 @@ import {
   OAuthStateAction,
   UserRole,
   type User,
-} from "@prisma/client";
+} from "../db/types";
 import { env } from "../configs/env.config";
 import { HttpError } from "../errors/http-error";
 import { oauthRepository } from "../repositories/oauth.repository";
@@ -21,13 +21,14 @@ import { oauthStateSecurity } from "../security/oauth-state.security";
 import { auditLogService, type RequestContext } from "./audit-log.service";
 import { loginSecurityService } from "./login-security.service";
 import { totpService } from "./totp.service";
+import { UserModel, OAuthAccountModel } from "../db/models";
 import type {
   OAuthExchangeInput,
   OAuthLinkInput,
   OAuthUnlinkInput,
 } from "../validators/oauth.validator";
 
-type AuthenticatedUser = { 
+type AuthenticatedUser = {
   id: string;
   email: string;
   username: string;
@@ -44,7 +45,7 @@ type GoogleIdentity = {
   expiresAt: number;
 };
 
-type GoogleOidcAdapter = { //this interface defines the methods that the Google OIDC adapter must implement
+type GoogleOidcAdapter = {
   getAuthorizationUrl(input: {
     state: string;
     nonce: string;
@@ -63,7 +64,7 @@ const GOOGLE_ISSUERS = new Set([
   "https://accounts.google.com",
 ]);
 
-const createDefaultGoogleAdapter = (): GoogleOidcAdapter => { 
+const createDefaultGoogleAdapter = (): GoogleOidcAdapter => {
   const client = new OAuth2Client({
     clientId: env.googleClientId,
     clientSecret: env.googleClientSecret,
@@ -71,7 +72,7 @@ const createDefaultGoogleAdapter = (): GoogleOidcAdapter => {
   });
 
   return {
-    getAuthorizationUrl({ state, nonce, codeChallenge }) { 
+    getAuthorizationUrl({ state, nonce, codeChallenge }) {
       return client.generateAuthUrl({
         prompt: "select_account",
         response_type: "code",
@@ -84,7 +85,7 @@ const createDefaultGoogleAdapter = (): GoogleOidcAdapter => {
       });
     },
 
-    async exchangeAuthorizationCode({ code, codeVerifier }) { 
+    async exchangeAuthorizationCode({ code, codeVerifier }) {
       const tokenResponse = await client.getToken({
         code,
         codeVerifier,
@@ -144,7 +145,7 @@ const createFailureRedirectUrl = (reason: string) => {
   return url.toString();
 };
 
-const createSuccessRedirectUrl = (code: string, action: OAuthStateAction) => {
+const createSuccessRedirectUrl = (code: string, action: keyof typeof OAuthStateAction) => {
   const url = new URL(env.oauthSuccessRedirect);
   url.searchParams.set("code", code);
   url.searchParams.set("action", action);
@@ -277,7 +278,7 @@ const validateReauthentication = async (
   throw new HttpError(401, "TOTP verification is required");
 };
 
-const createExchangeCode = async (userId: string, action: OAuthStateAction) => {
+const createExchangeCode = async (userId: string, action: keyof typeof OAuthStateAction) => {
   const rawCode = oauthStateSecurity.generateExchangeCode();
   const codeHash = oauthStateSecurity.hashExchangeCode(rawCode);
 
@@ -488,27 +489,41 @@ export const oauthService = {
         const randomPassword = crypto.randomBytes(32).toString("hex");
         const passwordHash = await bcrypt.hash(randomPassword, 10);
 
-        user = await oauthRepository.withTransaction(async (tx) => {
-          const createdUser = await tx.user.create({
-            data: {
+        user = await oauthRepository.withTransaction(async (session) => {
+          const createdUsers = await UserModel.create([
+            {
               email: identity.email,
               username,
               password: passwordHash,
               role: UserRole.BUYER,
               passwordAuthEnabled: false,
             },
-          });
+          ], { session });
 
-          await tx.oAuthAccount.create({
-            data: {
-              userId: createdUser.id,
+          await OAuthAccountModel.create([
+            {
+              userId: createdUsers[0]._id,
               provider: OAuthProvider.GOOGLE,
               providerAccountId: identity.sub,
               providerEmail: identity.email,
             },
-          });
+          ], { session });
 
-          return createdUser;
+          return {
+            id: String(createdUsers[0]._id),
+            username: createdUsers[0].username,
+            email: createdUsers[0].email,
+            password: createdUsers[0].password,
+            role: createdUsers[0].role,
+            failedLoginAttempts: createdUsers[0].failedLoginAttempts,
+            lockedUntil: createdUsers[0].lockedUntil,
+            lastFailedLoginAt: createdUsers[0].lastFailedLoginAt,
+            passwordAuthEnabled: createdUsers[0].passwordAuthEnabled,
+            totpEnabled: createdUsers[0].totpEnabled,
+            totpSecret: createdUsers[0].totpSecret,
+            createdAt: createdUsers[0].createdAt,
+            updatedAt: createdUsers[0].updatedAt,
+          } as User;
         });
 
         await auditLogService.createLogSafely({
@@ -581,7 +596,7 @@ export const oauthService = {
 
     await oauthRepository.consumeExchangeCode(exchangeCode.id, new Date());
 
-    const user = exchangeCode.user;
+    const user = exchangeCode.user!;
     const mfaChallenge = await totpService.createLoginChallenge(user);
 
     if (mfaChallenge) {

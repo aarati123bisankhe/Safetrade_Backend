@@ -1,4 +1,4 @@
-import { User } from "@prisma/client";
+import type { User } from "../db/types";
 import { HttpError } from "../errors/http-error";
 import { loginAttemptRepository } from "../repositories/login-attempt.repository";
 import { type LoginSecurityUpdateInput, userRepository } from "../repositories/user.repository";

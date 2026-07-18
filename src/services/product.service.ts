@@ -1,9 +1,10 @@
-import { Prisma, ProductStatus, UserRole } from "@prisma/client";
+import { ProductStatus, UserRole } from "../db/types";
 import { HttpError } from "../errors/http-error";
 import { productRepository } from "../repositories/product.repository";
 import { auditLogService, type RequestContext } from "./audit-log.service";
 import {
   CreateProductInput,
+  ListProductsQueryInput,
   UpdateProductInput,
 } from "../validators/product.validator";
 
@@ -12,9 +13,9 @@ type AuthenticatedUser = {
   role: UserRole;
 };
 
-export const productService = { //product
-  async getAllProducts() {
-    return productRepository.findAll();
+export const productService = {
+  async getAllProducts(query: ListProductsQueryInput) {
+    return productRepository.findMany(query);
   },
 
   async getProductById(productId: string) {
@@ -27,25 +28,33 @@ export const productService = { //product
     return product;
   },
 
+  async getMyProducts(
+    currentUser: AuthenticatedUser,
+    filters: { status?: ProductStatus }
+  ) {
+    return productRepository.findBySeller({
+      sellerId: currentUser.id,
+      status: filters.status,
+    });
+  },
+
   async createProduct(
     payload: CreateProductInput,
     currentUser: AuthenticatedUser,
     context?: RequestContext,
   ) {
-    const { name, description, price, category, condition, location } = payload;
+    const { name, description, imageUrl, price, category, condition, location } =
+      payload;
 
     const product = await productRepository.create({
       name,
       description,
+      ...(imageUrl ? { imageUrl } : {}),
       price,
       category,
       condition,
       location,
-      seller: {
-        connect: {
-          id: currentUser.id,
-        },
-      },
+      sellerId: currentUser.id,
     });
 
     await auditLogService.createLogSafely({
@@ -90,12 +99,13 @@ export const productService = { //product
       ...(payload.description !== undefined
         ? { description: payload.description }
         : {}),
+      ...(payload.imageUrl !== undefined ? { imageUrl: payload.imageUrl } : {}),
       ...(payload.price !== undefined ? { price: payload.price } : {}),
       ...(payload.category !== undefined ? { category: payload.category } : {}),
       ...(payload.condition !== undefined ? { condition: payload.condition } : {}),
       ...(payload.status !== undefined ? { status: payload.status } : {}),
       ...(payload.location !== undefined ? { location: payload.location } : {}),
-    } satisfies Prisma.ProductUpdateInput;
+    };
 
     const updatedProduct = await productRepository.update(productId, updateData);
 

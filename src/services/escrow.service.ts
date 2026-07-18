@@ -1,21 +1,24 @@
-import { Prisma, ProductStatus } from "@prisma/client";
+import type { ClientSession } from "mongoose";
+import { ProductModel } from "../db/models";
+import { ProductStatus } from "../db/types";
 import { HttpError } from "../errors/http-error";
 
-type PrismaExecutor = Pick<Prisma.TransactionClient, "product">;
-
-export const escrowService = { 
-  async reserveProduct(executor: PrismaExecutor, productId: string) {
-    const result = await executor.product.updateMany({
-      where: {
-        id: productId,
+export const escrowService = {
+  async reserveProduct(session: ClientSession, productId: string) {
+    const result = await ProductModel.updateOne(
+      {
+        _id: productId,
         status: ProductStatus.AVAILABLE,
       },
-      data: {
-        status: ProductStatus.RESERVED,
+      {
+        $set: {
+          status: ProductStatus.RESERVED,
+        },
       },
-    });
+      { session },
+    );
 
-    if (result.count !== 1) {
+    if (result.modifiedCount !== 1) {
       throw new HttpError(409, "Product is no longer available for purchase");
     }
   },

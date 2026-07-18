@@ -1,4 +1,4 @@
-import { DisputeReason } from "@prisma/client";
+import { DisputeReason } from "../db/types";
 import { z } from "zod";
 
 export const disputeIdParamSchema = z.object({

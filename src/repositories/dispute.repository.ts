@@ -1,173 +1,163 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "../configs/database.config";
+import {
+  DisputeEvidenceModel,
+  DisputeModel,
+  normalizeMongoDoc,
+  publicUserSelect,
+  type MongoSession,
+} from "../db/models";
+import type { Dispute } from "../db/types";
 
-type DisputeCreateData = 
-  | Prisma.DisputeCreateInput
-  | Prisma.DisputeUncheckedCreateInput;
-type DisputeUpdateData =
-  | Prisma.DisputeUpdateInput
-  | Prisma.DisputeUncheckedUpdateInput;
-
-export type DisputeClientLike = { 
-  dispute: {
-    create: (args: {
-      data: DisputeCreateData;
-      include: typeof disputeDetailsInclude;
-    }) => Promise<{ id: string }>;
-    update: (args: {
-      where: { id: string };
-      data: DisputeUpdateData;
-      include: typeof disputeDetailsInclude;
-    }) => Promise<any>;
-  };
-  tradeTransaction: {
-    update: (args: {
-      where: { id: string };
-      data: Prisma.TradeTransactionUpdateInput;
-    }) => Promise<unknown>;
-  };
-  product: {
-    update: (args: {
-      where: { id: string };
-      data: Prisma.ProductUpdateInput;
-    }) => Promise<unknown>;
-  };
+type DisputeCreateData = {
+  transactionId: string;
+  raisedById: string;
+  reason: Dispute["reason"];
+  description: string;
+  previousTransactionStatus: Dispute["previousTransactionStatus"];
 };
 
-const disputeDetailsInclude = {
-  raisedBy: {
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-  resolvedBy: {
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-  transaction: {
-    include: {
-      buyer: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-      seller: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-      product: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          category: true,
-          condition: true,
-          status: true,
-          location: true,
-          sellerId: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-    },
-  },
-  evidence: {
-    select: {
-      id: true,
-      disputeId: true,
-      uploadedById: true,
-      originalName: true,
-      mimeType: true,
-      sizeBytes: true,
-      sha256Hash: true,
-      createdAt: true,
-      uploadedBy: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-    },
-  },
-} as const;
+type DisputeUpdateData = Partial<
+  Pick<
+    Dispute,
+    "status" | "resolvedAt" | "resolvedById" | "adminNote"
+  >
+>;
+
+const populateDispute = (query: ReturnType<typeof DisputeModel.findById>) =>
+  query
+    .populate("raisedById", publicUserSelect)
+    .populate("resolvedById", publicUserSelect)
+    .populate({
+      path: "transactionId",
+      populate: [
+        { path: "buyerId", select: publicUserSelect },
+        { path: "sellerId", select: publicUserSelect },
+        { path: "productId" },
+      ],
+    });
+
+const attachEvidence = async (dispute: any) => {
+  if (!dispute) {
+    return null;
+  }
+
+  const evidence = await DisputeEvidenceModel.find({ disputeId: dispute.id })
+    .populate("uploadedById", publicUserSelect)
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const normalizedEvidence = normalizeMongoDoc<any[]>(evidence).map((item) => ({
+    ...item,
+    uploadedBy: item.uploadedById,
+  }));
+
+  return {
+    ...dispute,
+    raisedBy: dispute.raisedById,
+    raisedById: dispute.raisedById?.id ?? dispute.raisedById,
+    resolvedById: dispute.resolvedById?.id ?? dispute.resolvedById,
+    resolvedBy: dispute.resolvedById ?? null,
+    transaction: dispute.transactionId
+      ? {
+          ...dispute.transactionId,
+          buyerId: dispute.transactionId.buyerId?.id ?? dispute.transactionId.buyerId,
+          sellerId: dispute.transactionId.sellerId?.id ?? dispute.transactionId.sellerId,
+          productId: dispute.transactionId.productId?.id ?? dispute.transactionId.productId,
+          buyer: dispute.transactionId.buyerId,
+          seller: dispute.transactionId.sellerId,
+          product: dispute.transactionId.productId,
+        }
+      : undefined,
+    evidence: normalizedEvidence,
+  } as Dispute;
+};
 
 export const disputeRepository = {
-  create(client: DisputeClientLike, data: DisputeCreateData) {
-    return client.dispute.create({
-      data,
-      include: disputeDetailsInclude,
-    });
+  async create(data: DisputeCreateData, session?: MongoSession) {
+    const created = await DisputeModel.create([{ ...data }], session ? { session } : {});
+    const dispute = await populateDispute(DisputeModel.findById(created[0]._id).session(session ?? null)).lean();
+    return attachEvidence(normalizeMongoDoc<any>(dispute));
   },
 
-  findById(disputeId: string) {
-    return prisma.dispute.findUnique({
-      where: { id: disputeId },
-      include: disputeDetailsInclude,
-    });
+  async findById(disputeId: string) {
+    const dispute = await populateDispute(DisputeModel.findById(disputeId)).lean();
+    if (!dispute) {
+      return null;
+    }
+    return attachEvidence(normalizeMongoDoc<any>(dispute));
   },
 
-  findByTransactionId(transactionId: string) {
-    return prisma.dispute.findUnique({
-      where: { transactionId },
-      include: disputeDetailsInclude,
-    });
-  },
-
-  findVisibleDisputes(userId: string) {
-    return prisma.dispute.findMany({
-      where: {
-        OR: [
-          {
-            transaction: {
-              buyerId: userId,
-            },
-          },
-          {
-            transaction: {
-              sellerId: userId,
-            },
-          },
+  async findByTransactionId(transactionId: string) {
+    const dispute = await DisputeModel.findOne({ transactionId })
+      .populate("raisedById", publicUserSelect)
+      .populate("resolvedById", publicUserSelect)
+      .populate({
+        path: "transactionId",
+        populate: [
+          { path: "buyerId", select: publicUserSelect },
+          { path: "sellerId", select: publicUserSelect },
+          { path: "productId" },
         ],
-      },
-      include: disputeDetailsInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+      })
+      .lean();
+
+    if (!dispute) {
+      return null;
+    }
+    return attachEvidence(normalizeMongoDoc<any>(dispute));
   },
 
-  update(client: DisputeClientLike, disputeId: string, data: DisputeUpdateData) {
-    return client.dispute.update({
-      where: { id: disputeId },
-      data,
-      include: disputeDetailsInclude,
-    });
+  async findVisibleDisputes(userId: string) {
+    const disputes = await DisputeModel.find()
+      .populate("raisedById", publicUserSelect)
+      .populate("resolvedById", publicUserSelect)
+      .populate({
+        path: "transactionId",
+        match: { $or: [{ buyerId: userId }, { sellerId: userId }] },
+        populate: [
+          { path: "buyerId", select: publicUserSelect },
+          { path: "sellerId", select: publicUserSelect },
+          { path: "productId" },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const filtered = disputes.filter((item) => item.transactionId);
+    const results = await Promise.all(
+      normalizeMongoDoc<any[]>(filtered).map((item) => attachEvidence(item)),
+    );
+    return results as Dispute[];
+  },
+
+  async findAll() {
+    const disputes = await DisputeModel.find()
+      .populate("raisedById", publicUserSelect)
+      .populate("resolvedById", publicUserSelect)
+      .populate({
+        path: "transactionId",
+        populate: [
+          { path: "buyerId", select: publicUserSelect },
+          { path: "sellerId", select: publicUserSelect },
+          { path: "productId" },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const results = await Promise.all(
+      normalizeMongoDoc<any[]>(disputes).map((item) => attachEvidence(item)),
+    );
+    return results as Dispute[];
+  },
+
+  async update(disputeId: string, data: DisputeUpdateData, session?: MongoSession) {
+    const dispute = await populateDispute(
+      DisputeModel.findByIdAndUpdate(disputeId, data, { new: true, session }),
+    ).lean();
+
+    if (!dispute) {
+      throw new Error("Dispute not found");
+    }
+    return attachEvidence(normalizeMongoDoc<any>(dispute));
   },
 };

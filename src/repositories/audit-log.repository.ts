@@ -1,7 +1,8 @@
-import { prisma } from "../configs/database.config";
+import { AuditLogModel, normalizeMongoDoc, publicUserSelect, type MongoSession } from "../db/models";
+import type { AuditLog, AuditEventType } from "../db/types";
 
-export type AuditLogCreateData = { 
-  eventType: string;
+export type AuditLogCreateData = {
+  eventType: AuditEventType;
   actorId?: string;
   targetType?: string;
   targetId?: string;
@@ -13,55 +14,47 @@ export type AuditLogCreateData = {
 
 export type AuditLogWhere = Record<string, unknown>;
 
-export type AuditLogClientLike = any;
-
-const auditLogInclude = {
-  actor: {
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-} as const;
+export type AuditLogClientLike = MongoSession | undefined;
 
 export const auditLogRepository = {
-  create(
+  async create(
     client: AuditLogClientLike,
     data: AuditLogCreateData,
   ) {
-    return (client as any).auditLog.create({
-      data,
-    } as never);
+    const created = await AuditLogModel.create([{ ...data }], client ? { session: client } : {});
+    return normalizeMongoDoc<AuditLog>(created[0]);
   },
 
-  findById(auditLogId: string) {
-    return prisma.auditLog.findUnique({
-      where: { id: auditLogId },
-      include: auditLogInclude,
-    });
+  async findById(auditLogId: string) {
+    const log = await AuditLogModel.findById(auditLogId)
+      .populate("actorId", publicUserSelect)
+      .lean();
+    if (!log) {
+      return null;
+    }
+    const normalized = normalizeMongoDoc<any>(log);
+    normalized.actor = normalized.actorId ?? null;
+    return normalized as AuditLog;
   },
 
-  findMany(args: {
+  async findMany(args: {
     where: AuditLogWhere;
     skip: number;
     take: number;
   }) {
-    return prisma.auditLog.findMany({
-      where: args.where as never,
-      include: auditLogInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
-      skip: args.skip,
-      take: args.take,
-    });
+    const logs = await AuditLogModel.find(args.where)
+      .populate("actorId", publicUserSelect)
+      .sort({ createdAt: -1 })
+      .skip(args.skip)
+      .limit(args.take)
+      .lean();
+    return normalizeMongoDoc<any[]>(logs).map((item) => ({
+      ...item,
+      actor: item.actorId ?? null,
+    })) as AuditLog[];
   },
 
   count(where: AuditLogWhere) {
-    return prisma.auditLog.count({ where: where as never });
+    return AuditLogModel.countDocuments(where);
   },
 };

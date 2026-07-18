@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { UserRole } from "../db/types";
 
 declare global {
   namespace Express {
@@ -16,6 +16,8 @@ declare global {
         mimetype: string;
         size: number;
         buffer: Buffer;
+        filename?: string;
+        path?: string;
       };
     }
   }

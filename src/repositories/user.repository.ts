@@ -1,46 +1,49 @@
-import { Prisma, User } from "@prisma/client";
-import { prisma } from "../configs/database.config";
+import { UserModel, normalizeMongoDoc } from "../db/models";
+import type { User, UserRole } from "../db/types";
 
-export type LoginSecurityUpdateInput = { 
+export type LoginSecurityUpdateInput = {
   failedLoginAttempts: number;
   lockedUntil: Date | null;
   lastFailedLoginAt: Date | null;
 };
 
-export const userRepository = { 
-  create(data: Prisma.UserCreateInput): Promise<User> {
-    return prisma.user.create({ data });
+type CreateUserInput = {
+  username: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  passwordAuthEnabled?: boolean;
+};
+
+export const userRepository = {
+  async create(data: CreateUserInput): Promise<User> {
+    const user = await UserModel.create({
+      ...data,
+      email: data.email.toLowerCase(),
+    });
+    return normalizeMongoDoc(user as unknown) as User;
   },
 
-  findByEmail(email: string): Promise<User | null> {
-    return prisma.user.findUnique({
-      where: {
-        email: email.toLowerCase(),
-      },
-    });
+  async findByEmail(email: string): Promise<User | null> {
+    const user = await UserModel.findOne({ email: email.toLowerCase() }).lean();
+    return user ? (normalizeMongoDoc(user as unknown) as User) : null;
   },
 
-  findByUsername(username: string): Promise<User | null> {
-    return prisma.user.findUnique({
-      where: {
-        username,
-      },
-    });
+  async findByUsername(username: string): Promise<User | null> {
+    const user = await UserModel.findOne({ username }).lean();
+    return user ? (normalizeMongoDoc(user as unknown) as User) : null;
   },
 
-  findById(id: string): Promise<User | null> {
-    return prisma.user.findUnique({
-      where: { id },
-    });
+  async findById(id: string): Promise<User | null> {
+    const user = await UserModel.findById(id).lean();
+    return user ? (normalizeMongoDoc(user as unknown) as User) : null;
   },
 
-  updateLoginSecurity(
-    id: string,
-    data: LoginSecurityUpdateInput,
-  ): Promise<User> {
-    return prisma.user.update({
-      where: { id },
-      data,
-    });
+  async updateLoginSecurity(id: string, data: LoginSecurityUpdateInput): Promise<User> {
+    const user = await UserModel.findByIdAndUpdate(id, data, { new: true }).lean();
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return normalizeMongoDoc(user as unknown) as User;
   },
 };

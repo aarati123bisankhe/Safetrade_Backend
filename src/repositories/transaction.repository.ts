@@ -1,96 +1,149 @@
-import { prisma } from "../configs/database.config";
+import { TradeTransactionModel, normalizeMongoDoc, publicUserSelect, type MongoSession } from "../db/models";
+import type { TradeTransaction } from "../db/types";
 
-type TransactionCreateData = Parameters<typeof prisma.tradeTransaction.create>[0]["data"];
-type TransactionUpdateData = Parameters<typeof prisma.tradeTransaction.update>[0]["data"];
-type TransactionClientLike = { 
-  tradeTransaction: {
-    create: typeof prisma.tradeTransaction.create;
-    update: typeof prisma.tradeTransaction.update;
-  };
-  product: {
-    update: typeof prisma.product.update;
-  };
+type TransactionCreateData = {
+  buyerId: string;
+  sellerId: string;
+  productId: string;
+  productName: string;
+  agreedPrice: number;
+  status: TradeTransaction["status"];
 };
 
-const transactionDetailsInclude = {
-  buyer: {
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-  seller: {
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-  product: {
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      price: true,
-      category: true,
-      condition: true,
-      status: true,
-      location: true,
-      sellerId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  },
-} as const;
+type TransactionUpdateData = Partial<
+  Pick<
+    TradeTransaction,
+    "status" | "buyerConfirmedAt" | "releasedAt" | "refundedAt"
+  >
+>;
 
-export const transactionRepository = {  //transaction
-  create(client: TransactionClientLike, data: TransactionCreateData) {
-    return client.tradeTransaction.create({ data });
+const transactionDetailsQuery = () =>
+  TradeTransactionModel.find()
+    .populate("buyerId", publicUserSelect)
+    .populate("sellerId", publicUserSelect)
+    .populate("productId");
+
+export const transactionRepository = {
+  async create(data: TransactionCreateData, session?: MongoSession) {
+    const created = await TradeTransactionModel.create([{ ...data }], session ? { session } : {});
+    const transaction = await TradeTransactionModel.findById(created[0]._id)
+      .populate("buyerId", publicUserSelect)
+      .populate("sellerId", publicUserSelect)
+      .populate("productId")
+      .session(session ?? null)
+      .lean();
+
+    if (!transaction) {
+      throw new Error("Transaction not found after creation");
+    }
+
+    const normalized = normalizeMongoDoc<any>(transaction);
+    normalized.buyer = normalized.buyerId;
+    normalized.seller = normalized.sellerId;
+    normalized.product = normalized.productId;
+    normalized.buyerId = normalized.buyer?.id ?? normalized.buyerId;
+    normalized.sellerId = normalized.seller?.id ?? normalized.sellerId;
+    normalized.productId = normalized.product?.id ?? normalized.productId;
+    return normalized as TradeTransaction;
   },
 
-  findById(transactionId: string) {
-    return prisma.tradeTransaction.findUnique({
-      where: { id: transactionId },
-      include: transactionDetailsInclude,
-    });
+  async findById(transactionId: string) {
+    const transaction = await TradeTransactionModel.findById(transactionId)
+      .populate("buyerId", publicUserSelect)
+      .populate("sellerId", publicUserSelect)
+      .populate("productId")
+      .lean();
+
+    if (!transaction) {
+      return null;
+    }
+
+    const normalized = normalizeMongoDoc<any>(transaction);
+    normalized.buyer = normalized.buyerId;
+    normalized.seller = normalized.sellerId;
+    normalized.product = normalized.productId;
+    normalized.buyerId = normalized.buyer?.id ?? normalized.buyerId;
+    normalized.sellerId = normalized.seller?.id ?? normalized.sellerId;
+    normalized.productId = normalized.product?.id ?? normalized.productId;
+    return normalized as TradeTransaction;
   },
 
-  findBuyerTransactions(buyerId: string) {
-    return prisma.tradeTransaction.findMany({
-      where: { buyerId },
-      include: transactionDetailsInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+  async findBuyerTransactions(buyerId: string) {
+    const transactions = await TradeTransactionModel.find({ buyerId })
+      .populate("buyerId", publicUserSelect)
+      .populate("sellerId", publicUserSelect)
+      .populate("productId")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return normalizeMongoDoc<any[]>(transactions).map((item) => {
+      const buyer = item.buyerId;
+      const seller = item.sellerId;
+      const product = item.productId;
+
+      return {
+        ...item,
+        buyer,
+        seller,
+        product,
+        buyerId: buyer?.id ?? item.buyerId,
+        sellerId: seller?.id ?? item.sellerId,
+        productId: product?.id ?? item.productId,
+      };
+    }) as TradeTransaction[];
   },
 
-  findSellerTransactions(sellerId: string) {
-    return prisma.tradeTransaction.findMany({
-      where: { sellerId },
-      include: transactionDetailsInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+  async findSellerTransactions(sellerId: string) {
+    const transactions = await TradeTransactionModel.find({ sellerId })
+      .populate("buyerId", publicUserSelect)
+      .populate("sellerId", publicUserSelect)
+      .populate("productId")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return normalizeMongoDoc<any[]>(transactions).map((item) => {
+      const buyer = item.buyerId;
+      const seller = item.sellerId;
+      const product = item.productId;
+
+      return {
+        ...item,
+        buyer,
+        seller,
+        product,
+        buyerId: buyer?.id ?? item.buyerId,
+        sellerId: seller?.id ?? item.sellerId,
+        productId: product?.id ?? item.productId,
+      };
+    }) as TradeTransaction[];
   },
 
-  updateStatus(
-    client: TransactionClientLike,
+  async updateStatus(
     transactionId: string,
     data: TransactionUpdateData,
+    session?: MongoSession,
   ) {
-    return client.tradeTransaction.update({
-      where: { id: transactionId },
+    const transaction = await TradeTransactionModel.findByIdAndUpdate(
+      transactionId,
       data,
-      include: transactionDetailsInclude,
-    });
+      { new: true, session },
+    )
+      .populate("buyerId", publicUserSelect)
+      .populate("sellerId", publicUserSelect)
+      .populate("productId")
+      .lean();
+
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+
+    const normalized = normalizeMongoDoc<any>(transaction);
+    normalized.buyer = normalized.buyerId;
+    normalized.seller = normalized.sellerId;
+    normalized.product = normalized.productId;
+    normalized.buyerId = normalized.buyer?.id ?? normalized.buyerId;
+    normalized.sellerId = normalized.seller?.id ?? normalized.sellerId;
+    normalized.productId = normalized.product?.id ?? normalized.productId;
+    return normalized as TradeTransaction;
   },
 };

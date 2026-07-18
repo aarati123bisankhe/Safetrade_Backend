@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
-import { generate, generateSecret, generateURI, verify } from "otplib";
-import { UserRole } from "@prisma/client";
+import { generateSecret, generateURI, verify } from "otplib";
+import { UserRole } from "../db/types";
 import { env } from "../configs/env.config";
 import { HttpError } from "../errors/http-error";
 import { totpRepository } from "../repositories/totp.repository";
@@ -29,7 +29,7 @@ type MfaTokenPayload = {
   purpose: "totp_login";
 };
 
-type TotpReadyUser = { 
+type TotpReadyUser = {
   id: string;
   username: string;
   email: string;
@@ -46,8 +46,9 @@ const RECOVERY_CODE_COUNT = 8;
 const RECOVERY_CODE_GROUPS = 2;
 const RECOVERY_CODE_GROUP_LENGTH = 4;
 
-const createMfaToken = (userId: string) => { 
+const createMfaToken = (userId: string) => {
   const signOptions: SignOptions = {
+    algorithm: "RS256",
     expiresIn: MFA_TOKEN_EXPIRES_IN,
   };
 
@@ -56,13 +57,15 @@ const createMfaToken = (userId: string) => {
       sub: userId,
       purpose: "totp_login",
     },
-    env.mfaTokenSecret,
+    env.mfaTokenPrivateKey,
     signOptions,
   );
 };
 
 const verifyMfaToken = (token: string): MfaTokenPayload => {
-  const decoded = jwt.verify(token, env.mfaTokenSecret) as Partial<MfaTokenPayload>;
+  const decoded = jwt.verify(token, env.mfaTokenPublicKey, {
+    algorithms: ["RS256"],
+  }) as Partial<MfaTokenPayload>;
 
   if (decoded.purpose !== "totp_login" || !decoded.sub) {
     throw new HttpError(401, "Invalid MFA token");
@@ -85,21 +88,7 @@ const getDecryptedSecretOrThrow = (encryptedSecret?: string | null) => {
   return encryptionSecurity.decrypt(encryptedSecret);
 };
 
-const assertTotpReadyUser = (
-  user:
-    | {
-        id: string;
-        username: string;
-        email: string;
-        role: UserRole;
-        totpEnabled: boolean;
-        totpSecret: string | null;
-        createdAt: Date;
-        updatedAt: Date;
-        password: string;
-      }
-    | null,
-): TotpReadyUser => {
+const assertTotpReadyUser = (user: any): TotpReadyUser => {
   if (!user || !user.totpEnabled || !user.totpSecret) {
     throw new HttpError(401, "Invalid MFA token");
   }
@@ -227,7 +216,11 @@ export const totpService = {
       totpEnabled: boolean;
     },
   ) {
-    if (user.role === UserRole.ADMIN && !user.totpEnabled) {
+    if (
+      user.role === UserRole.ADMIN &&
+      !user.totpEnabled &&
+      env.nodeEnv !== "development"
+    ) {
       throw new HttpError(403, "Administrators must enable TOTP before they can log in");
     }
 

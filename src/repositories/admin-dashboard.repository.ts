@@ -1,13 +1,21 @@
 import {
+  AuditLogModel,
+  DisputeModel,
+  LoginAttemptModel,
+  ProductModel,
+  TradeTransactionModel,
+  UserModel,
+  normalizeMongoDoc,
+} from "../db/models";
+import {
   AuditEventType,
   DisputeStatus,
   ProductStatus,
   TransactionStatus,
   UserRole,
-} from "@prisma/client";
-import { prisma } from "../configs/database.config";
+} from "../db/types";
 
-export const adminDashboardRepository = { // Repository for fetching admin dashboard data
+export const adminDashboardRepository = {
   async getSummary(since: Date) {
     const now = new Date();
 
@@ -42,83 +50,64 @@ export const adminDashboardRepository = { // Repository for fetching admin dashb
       evidenceUploadsInPeriod,
       recentActivity,
     ] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { role: UserRole.BUYER } }),
-      prisma.user.count({ where: { role: UserRole.SELLER } }),
-      prisma.user.count({ where: { role: UserRole.ADMIN } }),
-      prisma.user.count({ where: { lockedUntil: { gt: now } } }),
-      prisma.product.count(),
-      prisma.product.count({ where: { status: ProductStatus.AVAILABLE } }),
-      prisma.product.count({ where: { status: ProductStatus.RESERVED } }),
-      prisma.product.count({ where: { status: ProductStatus.SOLD } }),
-      prisma.product.count({ where: { status: ProductStatus.REMOVED } }),
-      prisma.tradeTransaction.count(),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.FUNDS_HELD } }),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.SELLER_ACCEPTED } }),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.SHIPPED } }),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.DISPUTED } }),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.FUNDS_RELEASED } }),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.BUYER_REFUNDED } }),
-      prisma.tradeTransaction.count({ where: { status: TransactionStatus.CANCELLED } }),
-      prisma.dispute.count(),
-      prisma.dispute.count({ where: { status: DisputeStatus.OPEN } }),
-      prisma.dispute.count({ where: { status: DisputeStatus.UNDER_REVIEW } }),
-      prisma.dispute.count({ where: { status: DisputeStatus.RESOLVED_BUYER } }),
-      prisma.dispute.count({ where: { status: DisputeStatus.RESOLVED_SELLER } }),
-      prisma.dispute.count({ where: { status: DisputeStatus.REJECTED } }),
-      prisma.loginAttempt.count({
-        where: {
-          successful: false,
-          createdAt: { gte: since },
-        },
+      UserModel.countDocuments(),
+      UserModel.countDocuments({ role: UserRole.BUYER }),
+      UserModel.countDocuments({ role: UserRole.SELLER }),
+      UserModel.countDocuments({ role: UserRole.ADMIN }),
+      UserModel.countDocuments({ lockedUntil: { $gt: now } }),
+      ProductModel.countDocuments(),
+      ProductModel.countDocuments({ status: ProductStatus.AVAILABLE }),
+      ProductModel.countDocuments({ status: ProductStatus.RESERVED }),
+      ProductModel.countDocuments({ status: ProductStatus.SOLD }),
+      ProductModel.countDocuments({ status: ProductStatus.REMOVED }),
+      TradeTransactionModel.countDocuments(),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.FUNDS_HELD }),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.SELLER_ACCEPTED }),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.SHIPPED }),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.DISPUTED }),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.FUNDS_RELEASED }),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.BUYER_REFUNDED }),
+      TradeTransactionModel.countDocuments({ status: TransactionStatus.CANCELLED }),
+      DisputeModel.countDocuments(),
+      DisputeModel.countDocuments({ status: DisputeStatus.OPEN }),
+      DisputeModel.countDocuments({ status: DisputeStatus.UNDER_REVIEW }),
+      DisputeModel.countDocuments({ status: DisputeStatus.RESOLVED_BUYER }),
+      DisputeModel.countDocuments({ status: DisputeStatus.RESOLVED_SELLER }),
+      DisputeModel.countDocuments({ status: DisputeStatus.REJECTED }),
+      LoginAttemptModel.countDocuments({
+        successful: false,
+        createdAt: { $gte: since },
       }),
-      prisma.auditLog.count({
-        where: {
-          eventType: AuditEventType.ACCOUNT_LOCKED,
-          createdAt: { gte: since },
-        },
+      AuditLogModel.countDocuments({
+        eventType: AuditEventType.ACCOUNT_LOCKED,
+        createdAt: { $gte: since },
       }),
-      prisma.auditLog.count({
-        where: {
-          eventType: AuditEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
-          createdAt: { gte: since },
-        },
+      AuditLogModel.countDocuments({
+        eventType: AuditEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
+        createdAt: { $gte: since },
       }),
-      prisma.auditLog.count({
-        where: {
-          eventType: AuditEventType.DISPUTE_EVIDENCE_UPLOADED,
-          createdAt: { gte: since },
-        },
+      AuditLogModel.countDocuments({
+        eventType: AuditEventType.DISPUTE_EVIDENCE_UPLOADED,
+        createdAt: { $gte: since },
       }),
-      prisma.auditLog.findMany({
-        where: {
-          eventType: {
-            in: [
-              AuditEventType.ACCOUNT_LOCKED,
-              AuditEventType.LOGIN_BLOCKED,
-              AuditEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
-              AuditEventType.DISPUTE_OPENED,
-              AuditEventType.DISPUTE_REFUNDED,
-              AuditEventType.DISPUTE_RELEASED_TO_SELLER,
-              AuditEventType.DISPUTE_EVIDENCE_UPLOADED,
-              AuditEventType.FUNDS_RELEASED,
-            ],
-          },
+      AuditLogModel.find({
+        eventType: {
+          $in: [
+            AuditEventType.ACCOUNT_LOCKED,
+            AuditEventType.LOGIN_BLOCKED,
+            AuditEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
+            AuditEventType.DISPUTE_OPENED,
+            AuditEventType.DISPUTE_REFUNDED,
+            AuditEventType.DISPUTE_RELEASED_TO_SELLER,
+            AuditEventType.DISPUTE_EVIDENCE_UPLOADED,
+            AuditEventType.FUNDS_RELEASED,
+          ],
         },
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: 10,
-        select: {
-          id: true,
-          eventType: true,
-          actorId: true,
-          targetType: true,
-          targetId: true,
-          description: true,
-          createdAt: true,
-        },
-      }),
+      })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select("eventType actorId targetType targetId description createdAt")
+        .lean(),
     ]);
 
     return {
@@ -161,7 +150,7 @@ export const adminDashboardRepository = { // Repository for fetching admin dashb
         unauthorizedAttemptsLastPeriod: unauthorizedAttemptsInPeriod,
         evidenceUploadsLastPeriod: evidenceUploadsInPeriod,
       },
-      recentActivity,
+      recentActivity: normalizeMongoDoc(recentActivity),
     };
   },
 };

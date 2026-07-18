@@ -1,5 +1,4 @@
-import { Prisma, UserRole } from "@prisma/client";
-import { prisma } from "../configs/database.config";
+import { UserRole, type AuditEventType } from "../db/types";
 import { HttpError } from "../errors/http-error";
 import {
   auditLogRepository,
@@ -12,43 +11,7 @@ export type RequestContext = {
   userAgent?: string;
 };
 
-export type AuditEventTypeValue = 
-  | "USER_REGISTERED"
-  | "LOGIN_SUCCESS"
-  | "LOGIN_FAILURE"
-  | "ACCOUNT_LOCKED"
-  | "LOGIN_BLOCKED"
-  | "TOTP_SETUP_STARTED"
-  | "TOTP_ENABLED"
-  | "TOTP_VERIFICATION_FAILED"
-  | "TOTP_LOGIN_SUCCESS"
-  | "TOTP_DISABLED"
-  | "RECOVERY_CODE_USED"
-  | "OAUTH_LOGIN_STARTED"
-  | "OAUTH_LOGIN_SUCCESS"
-  | "OAUTH_LOGIN_FAILURE"
-  | "OAUTH_ACCOUNT_CREATED"
-  | "OAUTH_ACCOUNT_LINKED"
-  | "OAUTH_LINK_REJECTED"
-  | "OAUTH_ACCOUNT_UNLINKED"
-  | "PRODUCT_CREATED"
-  | "PRODUCT_UPDATED"
-  | "PRODUCT_REMOVED"
-  | "TRANSACTION_CREATED"
-  | "PRODUCT_RESERVED"
-  | "TRANSACTION_ACCEPTED"
-  | "TRANSACTION_SHIPPED"
-  | "RECEIPT_CONFIRMED"
-  | "FUNDS_RELEASED"
-  | "DISPUTE_OPENED"
-  | "DISPUTE_REVIEW_STARTED"
-  | "DISPUTE_REFUNDED"
-  | "DISPUTE_RELEASED_TO_SELLER"
-  | "DISPUTE_REJECTED"
-  | "DISPUTE_EVIDENCE_UPLOADED"
-  | "DISPUTE_EVIDENCE_VIEWED"
-  | "DISPUTE_EVIDENCE_UPLOAD_REJECTED"
-  | "UNAUTHORIZED_ACCESS_ATTEMPT";
+export type AuditEventTypeValue = AuditEventType;
 
 export type CreateAuditLogInput = {
   eventType: AuditEventTypeValue;
@@ -66,20 +29,10 @@ type AuthenticatedUser = {
   role: UserRole;
 };
 
-const toJsonValue = (
-  metadata?: Record<string, unknown>,
-): Prisma.InputJsonValue | undefined => {
-  if (!metadata) {
-    return undefined;
-  }
-
-  return metadata as Prisma.InputJsonValue;
-};
-
 export const auditLogService = {
   async createLog(
     input: CreateAuditLogInput,
-    client: AuditLogClientLike = prisma as unknown as AuditLogClientLike,
+    client?: AuditLogClientLike,
   ) {
     return auditLogRepository.create(client, {
       eventType: input.eventType,
@@ -89,7 +42,7 @@ export const auditLogService = {
       description: input.description,
       ipAddress: input.ipAddress,
       userAgent: input.userAgent,
-      metadata: toJsonValue(input.metadata),
+      metadata: input.metadata,
     });
   },
 
@@ -106,7 +59,7 @@ export const auditLogService = {
       throw new HttpError(403, "Only admins can access audit logs");
     }
 
-    const where: Prisma.AuditLogWhereInput = {
+    const where: Record<string, unknown> = {
       ...(query.eventType ? { eventType: query.eventType } : {}),
       ...(query.actorId ? { actorId: query.actorId } : {}),
       ...(query.targetType ? { targetType: query.targetType } : {}),
@@ -114,8 +67,8 @@ export const auditLogService = {
       ...(query.from || query.to
         ? {
             createdAt: {
-              ...(query.from ? { gte: new Date(query.from) } : {}),
-              ...(query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
+              ...(query.from ? { $gte: new Date(query.from) } : {}),
+              ...(query.to ? { $lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
             },
           }
         : {}),

@@ -1,4 +1,5 @@
-import { prisma } from "../configs/database.config";
+import { LoginAttemptModel, normalizeMongoDoc } from "../db/models";
+import type { LoginAttempt } from "../db/types";
 
 export type LoginAttemptCreateInput = {
   userId?: string;
@@ -9,10 +10,9 @@ export type LoginAttemptCreateInput = {
   reason?: string;
 };
 
-export const loginAttemptRepository = { 
-  create(data: LoginAttemptCreateInput) {
-    return prisma.loginAttempt.create({
-      data,
-    });
+export const loginAttemptRepository = {
+  async create(data: LoginAttemptCreateInput): Promise<LoginAttempt> {
+    const attempt = await LoginAttemptModel.create(data);
+    return normalizeMongoDoc<LoginAttempt>(attempt);
   },
 };

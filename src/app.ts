@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import path from "path";
 import { adminDashboardRoutes } from "./routes/admin-dashboard.routes";
 import { authRoutes } from "./routes/auth.routes";
 import { auditLogRoutes } from "./routes/audit-log.routes";
@@ -12,13 +13,18 @@ import { productRoutes } from "./routes/product.routes";
 import { transactionRoutes } from "./routes/transaction.routes";
 
 export const app = express();
+const uploadsDirectory = path.resolve(__dirname, "../uploads");
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(uploadsDirectory));
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({

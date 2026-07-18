@@ -6,9 +6,15 @@ type EnvConfig = {
   port: number;
   nodeEnv: string;
   databaseUrl: string;
-  jwtSecret: string;
+  redisEnabled: boolean;
+  redisUrl?: string;
+  httpsKeyPath?: string;
+  httpsCertPath?: string;
+  jwtPrivateKey: string;
+  jwtPublicKey: string;
   jwtExpiresIn: string;
-  mfaTokenSecret: string;
+  mfaTokenPrivateKey: string;
+  mfaTokenPublicKey: string;
   totpEncryptionKey: string;
   googleClientId: string;
   googleClientSecret: string;
@@ -20,8 +26,8 @@ type EnvConfig = {
 
 const requiredEnv = [
   "DATABASE_URL",
-  "JWT_SECRET",
-  "MFA_TOKEN_SECRET",
+  "JWT_PRIVATE_KEY",
+  "JWT_PUBLIC_KEY",
   "TOTP_ENCRYPTION_KEY",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
@@ -37,13 +43,26 @@ for (const key of requiredEnv) {
   }
 }
 
+const normalizeMultilineEnv = (value: string) => value.replace(/\\n/g, "\n");
+const parseBooleanEnv = (value?: string) => value === "true";
+
 export const env: EnvConfig = {
   port: Number(process.env.PORT ?? 5000),
   nodeEnv: process.env.NODE_ENV ?? "development",
   databaseUrl: process.env.DATABASE_URL as string,
-  jwtSecret: process.env.JWT_SECRET as string,
+  redisEnabled: parseBooleanEnv(process.env.REDIS_ENABLED),
+  redisUrl: process.env.REDIS_URL,
+  httpsKeyPath: process.env.HTTPS_KEY_PATH,
+  httpsCertPath: process.env.HTTPS_CERT_PATH,
+  jwtPrivateKey: normalizeMultilineEnv(process.env.JWT_PRIVATE_KEY as string),
+  jwtPublicKey: normalizeMultilineEnv(process.env.JWT_PUBLIC_KEY as string),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
-  mfaTokenSecret: process.env.MFA_TOKEN_SECRET as string,
+  mfaTokenPrivateKey: normalizeMultilineEnv(
+    (process.env.MFA_TOKEN_PRIVATE_KEY ?? process.env.JWT_PRIVATE_KEY) as string,
+  ),
+  mfaTokenPublicKey: normalizeMultilineEnv(
+    (process.env.MFA_TOKEN_PUBLIC_KEY ?? process.env.JWT_PUBLIC_KEY) as string,
+  ),
   totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY as string,
   googleClientId: process.env.GOOGLE_CLIENT_ID as string,
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET as string,

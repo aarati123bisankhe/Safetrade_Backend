@@ -1,4 +1,4 @@
-import { UserRole } from "@prisma/client";
+import { UserRole } from "../db/types";
 import { Router } from "express";
 import { adminDashboardController } from "../controllers/admin-dashboard.controller";
 import { authenticationMiddleware } from "../middlewares/authentication.middleware";

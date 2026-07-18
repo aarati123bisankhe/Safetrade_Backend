@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { UserRole } from "@prisma/client";
+import type { UserRole } from "../db/types";
 import { HttpError } from "../errors/http-error";
 
 export const authorizeRoles =

@@ -1,17 +1,13 @@
+import { DisputeModel, ProductModel, TradeTransactionModel } from "../db/models";
 import {
-  Prisma,
   ProductStatus,
   TransactionStatus,
   UserRole,
-} from "@prisma/client";
-import { prisma } from "../configs/database.config";
+} from "../db/types";
+import { runInTransaction } from "../configs/database.config";
 import { HttpError } from "../errors/http-error";
-import type { AuditLogClientLike } from "../repositories/audit-log.repository";
 import { auditLogService, type RequestContext } from "./audit-log.service";
-import {
-  disputeRepository,
-  type DisputeClientLike,
-} from "../repositories/dispute.repository";
+import { disputeRepository } from "../repositories/dispute.repository";
 import type {
   CreateDisputeInput,
   ResolveDisputeInput,
@@ -22,29 +18,11 @@ type AuthenticatedUser = {
   role: UserRole;
 };
 
-type DisputeStatusValue =
-  | "OPEN"
-  | "UNDER_REVIEW"
-  | "RESOLVED_BUYER"
-  | "RESOLVED_SELLER"
-  | "REJECTED";
-
 const disputableTransactionStatuses: TransactionStatus[] = [
   TransactionStatus.FUNDS_HELD,
   TransactionStatus.SELLER_ACCEPTED,
   TransactionStatus.SHIPPED,
 ];
-
-type VisibleDispute = {
-  status: DisputeStatusValue;
-  raisedById: string;
-  transaction: {
-    buyerId: string;
-    sellerId: string;
-    productId: string;
-    status: TransactionStatus;
-  };
-};
 
 const findDisputeOrThrow = async (disputeId: string) => {
   const dispute = await disputeRepository.findById(disputeId);
@@ -57,13 +35,13 @@ const findDisputeOrThrow = async (disputeId: string) => {
 };
 
 const assertCanViewDispute = (
-  dispute: VisibleDispute,
+  dispute: NonNullable<Awaited<ReturnType<typeof disputeRepository.findById>>>,
   currentUser: AuthenticatedUser,
 ) => {
   const canView =
     currentUser.role === UserRole.ADMIN ||
-    dispute.transaction.buyerId === currentUser.id ||
-    dispute.transaction.sellerId === currentUser.id;
+    dispute.transaction?.buyerId === currentUser.id ||
+    dispute.transaction?.sellerId === currentUser.id;
 
   if (!canView) {
     throw new HttpError(403, "You do not have permission to view this dispute");
@@ -82,16 +60,16 @@ export const disputeService = {
     currentUser: AuthenticatedUser,
     context?: RequestContext,
   ) {
-    const disputeId = await prisma.$transaction(async (tx) => {
-      const transaction = await tx.tradeTransaction.findUnique({
-        where: { id: payload.transactionId },
-      });
+    const disputeId = await runInTransaction(async (session) => {
+      const transaction = await TradeTransactionModel.findById(payload.transactionId)
+        .session(session)
+        .lean() as any;
 
       if (!transaction) {
         throw new HttpError(404, "Transaction not found");
       }
 
-      if (transaction.buyerId !== currentUser.id) {
+      if (String(transaction.buyerId) !== currentUser.id) {
         throw new HttpError(403, "Only the buyer can raise a dispute");
       }
 
@@ -102,29 +80,32 @@ export const disputeService = {
         );
       }
 
-      const existingDispute = await tx.dispute.findUnique({
-        where: { transactionId: transaction.id },
-      });
+      const existingDispute = await DisputeModel.findOne({
+        transactionId: transaction._id,
+      })
+        .session(session)
+        .lean() as any;
 
       if (existingDispute) {
         throw new HttpError(409, "A dispute already exists for this transaction");
       }
 
-      const dispute = await disputeRepository.create(
-        tx as Prisma.TransactionClient & DisputeClientLike,
+      const dispute = (await disputeRepository.create(
         {
-          transactionId: transaction.id,
+          transactionId: String(transaction._id),
           raisedById: currentUser.id,
           reason: payload.reason,
           description: payload.description.trim(),
           previousTransactionStatus: transaction.status,
         },
-      );
+        session,
+      ))!;
 
-      await tx.tradeTransaction.update({
-        where: { id: transaction.id },
-        data: { status: TransactionStatus.DISPUTED },
-      });
+      await TradeTransactionModel.findByIdAndUpdate(
+        transaction._id,
+        { status: TransactionStatus.DISPUTED },
+        { session },
+      );
 
       await auditLogService.createLog(
         {
@@ -136,13 +117,13 @@ export const disputeService = {
           ipAddress: context?.ipAddress,
           userAgent: context?.userAgent,
           metadata: {
-            transactionId: transaction.id,
+            transactionId: String(transaction._id),
             reason: payload.reason,
             previousTransactionStatus: transaction.status,
             finalTransactionStatus: "DISPUTED",
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       return dispute.id;
@@ -158,6 +139,10 @@ export const disputeService = {
   },
 
   async getMyDisputes(currentUser: AuthenticatedUser) {
+    if (currentUser.role === UserRole.ADMIN) {
+      return disputeRepository.findAll();
+    }
+
     return disputeRepository.findVisibleDisputes(currentUser.id);
   },
 
@@ -183,14 +168,14 @@ export const disputeService = {
       );
     }
 
-    return prisma.$transaction(async (tx) => {
-      const updatedDispute = await disputeRepository.update(
-        tx as Prisma.TransactionClient & DisputeClientLike,
+    return runInTransaction(async (session) => {
+      const updatedDispute = (await disputeRepository.update(
         disputeId,
         {
           status: "UNDER_REVIEW",
         },
-      );
+        session,
+      ))!;
 
       await auditLogService.createLog(
         {
@@ -207,7 +192,7 @@ export const disputeService = {
             finalStatus: updatedDispute.status,
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       return updatedDispute;
@@ -231,7 +216,7 @@ export const disputeService = {
       );
     }
 
-    if (dispute.transaction.status !== TransactionStatus.DISPUTED) {
+    if (dispute.transaction?.status !== TransactionStatus.DISPUTED) {
       throw new HttpError(
         409,
         "Only disputed transactions can be resolved",
@@ -240,25 +225,26 @@ export const disputeService = {
 
     const now = new Date();
 
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (session) => {
       if (payload.decision === "REFUND_BUYER") {
-        await tx.tradeTransaction.update({
-          where: { id: dispute.transactionId },
-          data: {
+        await TradeTransactionModel.findByIdAndUpdate(
+          dispute.transactionId,
+          {
             status: TransactionStatus.BUYER_REFUNDED,
             refundedAt: now,
           },
-        });
+          { session },
+        );
 
-        await tx.product.update({
-          where: { id: dispute.transaction.productId },
-          data: {
+        await ProductModel.findByIdAndUpdate(
+          dispute.transaction?.productId,
+          {
             status: ProductStatus.AVAILABLE,
           },
-        });
+          { session },
+        );
 
-        return disputeRepository.update(
-          tx as Prisma.TransactionClient & DisputeClientLike,
+        const updatedDispute = (await disputeRepository.update(
           disputeId,
           {
             status: "RESOLVED_BUYER",
@@ -266,105 +252,16 @@ export const disputeService = {
             resolvedById: currentUser.id,
             adminNote: payload.adminNote.trim(),
           },
-        ).then(async (updatedDispute) => {
-          await auditLogService.createLog(
-            {
-              eventType: "DISPUTE_REFUNDED",
-              actorId: currentUser.id,
-              targetType: "Dispute",
-              targetId: updatedDispute.id,
-              description: "Administrator resolved a dispute in favor of the buyer",
-              ipAddress: context?.ipAddress,
-              userAgent: context?.userAgent,
-              metadata: {
-                disputeId: updatedDispute.id,
-                transactionId: updatedDispute.transactionId,
-                decision: payload.decision,
-                previousTransactionStatus: dispute.previousTransactionStatus,
-                finalTransactionStatus: TransactionStatus.BUYER_REFUNDED,
-              },
-            },
-            tx as AuditLogClientLike,
-          );
+          session,
+        ))!;
 
-          return updatedDispute;
-        });
-      }
-
-      if (payload.decision === "RELEASE_SELLER") {
-        await tx.tradeTransaction.update({
-          where: { id: dispute.transactionId },
-          data: {
-            status: TransactionStatus.FUNDS_RELEASED,
-            releasedAt: now,
-          },
-        });
-
-        await tx.product.update({
-          where: { id: dispute.transaction.productId },
-          data: {
-            status: ProductStatus.SOLD,
-          },
-        });
-
-        return disputeRepository.update(
-          tx as Prisma.TransactionClient & DisputeClientLike,
-          disputeId,
-          {
-            status: "RESOLVED_SELLER",
-            resolvedAt: now,
-            resolvedById: currentUser.id,
-            adminNote: payload.adminNote.trim(),
-          },
-        ).then(async (updatedDispute) => {
-          await auditLogService.createLog(
-            {
-              eventType: "DISPUTE_RELEASED_TO_SELLER",
-              actorId: currentUser.id,
-              targetType: "Dispute",
-              targetId: updatedDispute.id,
-              description: "Administrator resolved a dispute in favor of the seller",
-              ipAddress: context?.ipAddress,
-              userAgent: context?.userAgent,
-              metadata: {
-                disputeId: updatedDispute.id,
-                transactionId: updatedDispute.transactionId,
-                decision: payload.decision,
-                previousTransactionStatus: dispute.previousTransactionStatus,
-                finalTransactionStatus: TransactionStatus.FUNDS_RELEASED,
-              },
-            },
-            tx as AuditLogClientLike,
-          );
-
-          return updatedDispute;
-        });
-      }
-
-      await tx.tradeTransaction.update({
-        where: { id: dispute.transactionId },
-        data: {
-          status: dispute.previousTransactionStatus,
-        },
-      });
-
-      return disputeRepository.update(
-        tx as Prisma.TransactionClient & DisputeClientLike,
-        disputeId,
-        {
-          status: "REJECTED",
-          resolvedAt: now,
-          resolvedById: currentUser.id,
-          adminNote: payload.adminNote.trim(),
-        },
-      ).then(async (updatedDispute) => {
         await auditLogService.createLog(
           {
-            eventType: "DISPUTE_REJECTED",
+            eventType: "DISPUTE_REFUNDED",
             actorId: currentUser.id,
             targetType: "Dispute",
             targetId: updatedDispute.id,
-            description: "Administrator rejected a dispute and restored the transaction state",
+            description: "Administrator resolved a dispute in favor of the buyer",
             ipAddress: context?.ipAddress,
             userAgent: context?.userAgent,
             metadata: {
@@ -372,14 +269,107 @@ export const disputeService = {
               transactionId: updatedDispute.transactionId,
               decision: payload.decision,
               previousTransactionStatus: dispute.previousTransactionStatus,
-              finalTransactionStatus: dispute.previousTransactionStatus,
+              finalTransactionStatus: TransactionStatus.BUYER_REFUNDED,
             },
           },
-          tx as AuditLogClientLike,
+          session,
         );
 
         return updatedDispute;
-      });
+      }
+
+      if (payload.decision === "RELEASE_SELLER") {
+        await TradeTransactionModel.findByIdAndUpdate(
+          dispute.transactionId,
+          {
+            status: TransactionStatus.FUNDS_RELEASED,
+            releasedAt: now,
+          },
+          { session },
+        );
+
+        await ProductModel.findByIdAndUpdate(
+          dispute.transaction?.productId,
+          {
+            status: ProductStatus.SOLD,
+          },
+          { session },
+        );
+
+        const updatedDispute = (await disputeRepository.update(
+          disputeId,
+          {
+            status: "RESOLVED_SELLER",
+            resolvedAt: now,
+            resolvedById: currentUser.id,
+            adminNote: payload.adminNote.trim(),
+          },
+          session,
+        ))!;
+
+        await auditLogService.createLog(
+          {
+            eventType: "DISPUTE_RELEASED_TO_SELLER",
+            actorId: currentUser.id,
+            targetType: "Dispute",
+            targetId: updatedDispute.id,
+            description: "Administrator resolved a dispute in favor of the seller",
+            ipAddress: context?.ipAddress,
+            userAgent: context?.userAgent,
+            metadata: {
+              disputeId: updatedDispute.id,
+              transactionId: updatedDispute.transactionId,
+              decision: payload.decision,
+              previousTransactionStatus: dispute.previousTransactionStatus,
+              finalTransactionStatus: TransactionStatus.FUNDS_RELEASED,
+            },
+          },
+          session,
+        );
+
+        return updatedDispute;
+      }
+
+      await TradeTransactionModel.findByIdAndUpdate(
+        dispute.transactionId,
+        {
+          status: dispute.previousTransactionStatus,
+        },
+        { session },
+      );
+
+      const updatedDispute = (await disputeRepository.update(
+        disputeId,
+        {
+          status: "REJECTED",
+          resolvedAt: now,
+          resolvedById: currentUser.id,
+          adminNote: payload.adminNote.trim(),
+        },
+        session,
+      ))!;
+
+      await auditLogService.createLog(
+        {
+          eventType: "DISPUTE_REJECTED",
+          actorId: currentUser.id,
+          targetType: "Dispute",
+          targetId: updatedDispute.id,
+          description: "Administrator rejected a dispute and restored the transaction state",
+          ipAddress: context?.ipAddress,
+          userAgent: context?.userAgent,
+          metadata: {
+            disputeId: updatedDispute.id,
+            transactionId: updatedDispute.transactionId,
+            decision: payload.decision,
+            previousTransactionStatus: dispute.previousTransactionStatus,
+            finalTransactionStatus: dispute.previousTransactionStatus,
+          },
+        },
+        session,
+      );
+
+      return updatedDispute;
     });
   },
 };

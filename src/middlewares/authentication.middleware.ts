@@ -22,7 +22,9 @@ export const authenticationMiddleware = async ( //
   }
 
   const token = authorization.split(" ")[1];
-  const decoded = jwt.verify(token, env.jwtSecret) as JwtPayload;
+  const decoded = jwt.verify(token, env.jwtPublicKey, {
+    algorithms: ["RS256"],
+  }) as JwtPayload;
 
   if (decoded.purpose) {
     return next(new HttpError(401, "This token cannot be used for authenticated routes"));

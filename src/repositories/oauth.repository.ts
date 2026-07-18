@@ -1,12 +1,25 @@
-import { OAuthProvider, OAuthStateAction, Prisma, UserRole } from "@prisma/client";
-import { prisma } from "../configs/database.config";
-
-const oauthAccountInclude = {
-  user: true,
-} as const;
+import { type ClientSession } from "mongoose";
+import {
+  OAuthAccountModel,
+  OAuthExchangeCodeModel,
+  OAuthStateModel,
+  UserModel,
+  normalizeMongoDoc,
+  publicUserSelect,
+} from "../db/models";
+import {
+  OAuthProvider,
+  type OAuthAccount,
+  type OAuthExchangeCode,
+  type OAuthState,
+  OAuthStateAction,
+  UserRole,
+  type User,
+} from "../db/types";
+import { runInTransaction } from "../configs/database.config";
 
 export const oauthRepository = {
-  createState(data: {
+  async createState(data: {
     stateHash: string;
     nonce: string;
     codeVerifier: string;
@@ -14,107 +27,95 @@ export const oauthRepository = {
     userId?: string;
     expiresAt: Date;
   }) {
-    return prisma.oAuthState.create({
-      data,
-    });
+    const state = await OAuthStateModel.create(data);
+    return normalizeMongoDoc(state as unknown) as OAuthState;
   },
 
-  findStateByHash(stateHash: string) {
-    return prisma.oAuthState.findUnique({
-      where: { stateHash },
-    });
+  async findStateByHash(stateHash: string) {
+    const state = await OAuthStateModel.findOne({ stateHash }).lean();
+    return state ? (normalizeMongoDoc(state as unknown) as OAuthState) : null;
   },
 
-  consumeState(id: string, consumedAt: Date) {
-    return prisma.oAuthState.update({
-      where: { id },
-      data: { consumedAt },
-    });
+  async consumeState(id: string, consumedAt: Date) {
+    const state = await OAuthStateModel.findByIdAndUpdate(id, { consumedAt }, { new: true }).lean();
+    return state ? (normalizeMongoDoc(state as unknown) as OAuthState) : null;
   },
 
-  createExchangeCode(data: {
+  async createExchangeCode(data: {
     codeHash: string;
     userId: string;
     action: OAuthStateAction;
     expiresAt: Date;
   }) {
-    return prisma.oAuthExchangeCode.create({
-      data,
-    });
+    const code = await OAuthExchangeCodeModel.create(data);
+    return normalizeMongoDoc(code as unknown) as OAuthExchangeCode;
   },
 
-  findExchangeCodeByHash(codeHash: string) {
-    return prisma.oAuthExchangeCode.findUnique({
-      where: { codeHash },
-      include: {
-        user: true,
-      },
-    });
+  async findExchangeCodeByHash(codeHash: string) {
+    const code = await OAuthExchangeCodeModel.findOne({ codeHash })
+      .populate("userId")
+      .lean();
+    if (!code) {
+      return null;
+    }
+    const normalized = normalizeMongoDoc<any>(code);
+    normalized.user = normalized.userId;
+    return normalized as OAuthExchangeCode;
   },
 
-  consumeExchangeCode(id: string, consumedAt: Date) {
-    return prisma.oAuthExchangeCode.update({
-      where: { id },
-      data: { consumedAt },
-    });
+  async consumeExchangeCode(id: string, consumedAt: Date) {
+    const code = await OAuthExchangeCodeModel.findByIdAndUpdate(id, { consumedAt }, { new: true }).lean();
+    return code ? (normalizeMongoDoc(code as unknown) as OAuthExchangeCode) : null;
   },
 
-  findOAuthAccount(provider: OAuthProvider, providerAccountId: string) {
-    return prisma.oAuthAccount.findUnique({
-      where: {
-        provider_providerAccountId: {
-          provider,
-          providerAccountId,
-        },
-      },
-      include: oauthAccountInclude,
-    });
+  async findOAuthAccount(provider: OAuthProvider, providerAccountId: string) {
+    const account = await OAuthAccountModel.findOne({
+      provider,
+      providerAccountId,
+    })
+      .populate("userId")
+      .lean();
+
+    if (!account) {
+      return null;
+    }
+
+    const normalized = normalizeMongoDoc<any>(account);
+    normalized.user = normalized.userId;
+    return normalized as OAuthAccount;
   },
 
-  findUserOAuthAccount(userId: string, provider: OAuthProvider) {
-    return prisma.oAuthAccount.findFirst({
-      where: {
-        userId,
-        provider,
-      },
-    });
+  async findUserOAuthAccount(userId: string, provider: OAuthProvider) {
+    const account = await OAuthAccountModel.findOne({ userId, provider }).lean();
+    return account ? (normalizeMongoDoc(account as unknown) as OAuthAccount) : null;
   },
 
   countUserOAuthAccounts(userId: string) {
-    return prisma.oAuthAccount.count({
-      where: { userId },
-    });
+    return OAuthAccountModel.countDocuments({ userId });
   },
 
-  createOAuthAccount(data: {
+  async createOAuthAccount(data: {
     userId: string;
     provider: OAuthProvider;
     providerAccountId: string;
     providerEmail?: string;
   }) {
-    return prisma.oAuthAccount.create({
-      data,
-    });
+    const account = await OAuthAccountModel.create(data);
+    return normalizeMongoDoc<OAuthAccount>(account);
   },
 
   deleteOAuthAccount(id: string) {
-    return prisma.oAuthAccount.delete({
-      where: { id },
-    });
+    return OAuthAccountModel.findByIdAndDelete(id).lean();
   },
 
-  findUserByEmail(email: string) {
-    return prisma.user.findUnique({
-      where: {
-        email: email.toLowerCase(),
-      },
-    });
+  async findUserByEmail(email: string) {
+    const user = await UserModel.findOne({ email: email.toLowerCase() }).lean();
+    return user ? (normalizeMongoDoc(user as unknown) as User) : null;
   },
 
-  findUserById(userId: string) {
-    return prisma.user.findUnique({
-      where: { id: userId },
-    });
+  async findUserById(userId: string) {
+    const user = await UserModel.findById(userId).lean();
+    return user ? (normalizeMongoDoc(user as unknown) as User) : null;
   },
 
   async createOAuthUser(data: {
@@ -122,27 +123,29 @@ export const oauthRepository = {
     username: string;
     password: string;
   }) {
-    return prisma.user.create({
-      data: {
-        email: data.email.toLowerCase(),
-        username: data.username,
-        password: data.password,
-        role: UserRole.BUYER,
-        passwordAuthEnabled: false,
-      },
+    const user = await UserModel.create({
+      email: data.email.toLowerCase(),
+      username: data.username,
+      password: data.password,
+      role: UserRole.BUYER,
+      passwordAuthEnabled: false,
     });
+    return normalizeMongoDoc(user as unknown) as User;
   },
 
-  updateUserPasswordAuth(userId: string, passwordAuthEnabled: boolean) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: { passwordAuthEnabled },
-    });
+  async updateUserPasswordAuth(userId: string, passwordAuthEnabled: boolean) {
+    const user = await UserModel.findByIdAndUpdate(
+      userId,
+      { passwordAuthEnabled },
+      { new: true },
+    ).lean();
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return normalizeMongoDoc(user as unknown) as User;
   },
 
-  async withTransaction<T>(
-    callback: (tx: Prisma.TransactionClient) => Promise<T>,
-  ) {
-    return prisma.$transaction(callback);
+  withTransaction<T>(callback: (session: ClientSession) => Promise<T>) {
+    return runInTransaction(callback);
   },
 };

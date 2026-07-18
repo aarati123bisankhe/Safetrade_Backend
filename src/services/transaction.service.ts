@@ -1,12 +1,11 @@
+import { ProductModel, TradeTransactionModel } from "../db/models";
 import {
-  Prisma,
   ProductStatus,
   TransactionStatus,
   UserRole,
-} from "@prisma/client";
-import { prisma } from "../configs/database.config";
+} from "../db/types";
+import { runInTransaction } from "../configs/database.config";
 import { HttpError } from "../errors/http-error";
-import type { AuditLogClientLike } from "../repositories/audit-log.repository";
 import { transactionRepository } from "../repositories/transaction.repository";
 import { auditLogService, type RequestContext } from "./audit-log.service";
 import { CreateTransactionInput } from "../validators/transaction.validator";
@@ -64,25 +63,21 @@ const findTransactionOrThrow = async (transactionId: string) => {
 
   return transaction;
 };
- 
+
 export const transactionService = {
-  async createTransaction(  
+  async createTransaction(
     payload: CreateTransactionInput,
     currentUser: AuthenticatedUser,
     context?: RequestContext,
   ) {
-    return prisma.$transaction(async (tx) => {
-      const product = await tx.product.findUnique({
-        where: {
-          id: payload.productId,
-        },
-      });
+    return runInTransaction(async (session) => {
+      const product = await ProductModel.findById(payload.productId).session(session).lean() as any;
 
       if (!product) {
         throw new HttpError(404, "Product not found");
       }
 
-      if (product.sellerId === currentUser.id) {
+      if (String(product.sellerId) === currentUser.id) {
         throw new HttpError(403, "You cannot purchase your own product");
       }
 
@@ -94,54 +89,53 @@ export const transactionService = {
         throw new HttpError(409, "Product is not available for purchase");
       }
 
-      const reservedProduct = await tx.product.updateMany({
-        where: {
-          id: payload.productId,
+      const reservedProduct = await ProductModel.updateOne(
+        {
+          _id: payload.productId,
           status: ProductStatus.AVAILABLE,
         },
-        data: {
-          status: ProductStatus.RESERVED,
+        {
+          $set: { status: ProductStatus.RESERVED },
         },
-      });
+        { session },
+      );
 
-      if (reservedProduct.count !== 1) {
+      if (reservedProduct.modifiedCount !== 1) {
         throw new HttpError(409, "This product is no longer available");
       }
 
-      const transactionData: Prisma.TradeTransactionUncheckedCreateInput = {
-        buyerId: currentUser.id,
-        sellerId: product.sellerId,
-        productId: product.id,
-        productName: product.name,
-        agreedPrice: product.price,
-        status: "FUNDS_HELD",
-      };
-
       const transaction = await transactionRepository.create(
-        tx as Prisma.TransactionClient & {
-          tradeTransaction: {
-            create: typeof prisma.tradeTransaction.create;
-          };
+        {
+          buyerId: currentUser.id,
+          sellerId: String(product.sellerId),
+          productId: String(product._id),
+          productName: product.name,
+          agreedPrice: product.price,
+          status: TransactionStatus.FUNDS_HELD,
         },
-        transactionData,
+        session,
       );
+      const transactionProductId =
+        typeof transaction.productId === "string"
+          ? transaction.productId
+          : transaction.product?.id ?? String(product._id);
 
       await auditLogService.createLog(
         {
           eventType: "PRODUCT_RESERVED",
           actorId: currentUser.id,
           targetType: "Product",
-          targetId: product.id,
+          targetId: transactionProductId,
           description: "Product was reserved for an escrow transaction",
           ipAddress: context?.ipAddress,
           userAgent: context?.userAgent,
           metadata: {
             transactionId: transaction.id,
-            sellerId: product.sellerId,
+            sellerId: transaction.sellerId,
             status: "RESERVED",
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       await auditLogService.createLog(
@@ -154,12 +148,12 @@ export const transactionService = {
           ipAddress: context?.ipAddress,
           userAgent: context?.userAgent,
           metadata: {
-            productId: transaction.productId,
+            productId: transactionProductId,
             sellerId: transaction.sellerId,
             status: transaction.status,
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       return transaction;
@@ -198,21 +192,13 @@ export const transactionService = {
       );
     }
 
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (session) => {
       const updatedTransaction = await transactionRepository.updateStatus(
-        tx as Prisma.TransactionClient & {
-          tradeTransaction: {
-            create: typeof prisma.tradeTransaction.create;
-            update: typeof prisma.tradeTransaction.update;
-          };
-          product: {
-            update: typeof prisma.product.update;
-          };
-        },
         transactionId,
         {
           status: TransactionStatus.SELLER_ACCEPTED,
         },
+        session,
       );
 
       await auditLogService.createLog(
@@ -229,7 +215,7 @@ export const transactionService = {
             status: updatedTransaction.status,
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       return updatedTransaction;
@@ -251,21 +237,13 @@ export const transactionService = {
       );
     }
 
-    return prisma.$transaction(async (tx) => {
+    return runInTransaction(async (session) => {
       const updatedTransaction = await transactionRepository.updateStatus(
-        tx as Prisma.TransactionClient & {
-          tradeTransaction: {
-            create: typeof prisma.tradeTransaction.create;
-            update: typeof prisma.tradeTransaction.update;
-          };
-          product: {
-            update: typeof prisma.product.update;
-          };
-        },
         transactionId,
         {
           status: TransactionStatus.SHIPPED,
         },
+        session,
       );
 
       await auditLogService.createLog(
@@ -282,7 +260,7 @@ export const transactionService = {
             status: updatedTransaction.status,
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       return updatedTransaction;
@@ -308,30 +286,21 @@ export const transactionService = {
       );
     }
 
-    return prisma.$transaction(async (tx) => {
-      await tx.product.update({
-        where: { id: transaction.productId },
-        data: {
-          status: ProductStatus.SOLD,
-        },
-      });
+    return runInTransaction(async (session) => {
+      await ProductModel.findByIdAndUpdate(
+        transaction.productId,
+        { status: ProductStatus.SOLD },
+        { session },
+      );
 
       const updatedTransaction = await transactionRepository.updateStatus(
-        tx as Prisma.TransactionClient & {
-          tradeTransaction: {
-            create: typeof prisma.tradeTransaction.create;
-            update: typeof prisma.tradeTransaction.update;
-          };
-          product: {
-            update: typeof prisma.product.update;
-          };
-        },
         transactionId,
         {
           status: TransactionStatus.FUNDS_RELEASED,
           buyerConfirmedAt: new Date(),
           releasedAt: new Date(),
         },
+        session,
       );
 
       await auditLogService.createLog(
@@ -348,7 +317,7 @@ export const transactionService = {
             status: updatedTransaction.status,
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       await auditLogService.createLog(
@@ -365,7 +334,7 @@ export const transactionService = {
             finalStatus: updatedTransaction.status,
           },
         },
-        tx as AuditLogClientLike,
+        session,
       );
 
       return updatedTransaction;

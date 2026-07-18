@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import { HttpError } from "../errors/http-error";
 
 export const errorMiddleware = (
@@ -31,7 +31,7 @@ export const errorMiddleware = (
     if (typedError.code === "LIMIT_FILE_SIZE") {
       return res.status(413).json({
         success: false,
-        message: "Evidence file exceeds the 5 MB size limit",
+        message: "Uploaded file exceeds the 5 MB size limit",
       });
     }
 
@@ -43,7 +43,7 @@ export const errorMiddleware = (
     }
   }
 
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+  if (error instanceof mongoose.Error) {
     return res.status(400).json({
       success: false,
       message: error.message,
